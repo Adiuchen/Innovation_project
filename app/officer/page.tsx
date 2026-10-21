@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeading } from "@/components/PageHeading";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
+import { healthLabels, optionLabel } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
 import { reviewRecord } from "./actions";
 
@@ -68,7 +69,7 @@ export default async function OfficerHome({
               <p className="text-sm">
                 {record.location_name || t.noPlaceName}
                 {record.latitude != null ? ` · ${record.latitude}, ${record.longitude}` : ""}
-                {record.health_status ? ` · ${t.health}: ${record.health_status}` : ""}
+                {record.health_status ? ` · ${t.health}: ${optionLabel(record.health_status, healthLabels(t))}` : ""}
               </p>
               {canDecide ? (
                 <form action={reviewRecord} className="mt-3 space-y-2">

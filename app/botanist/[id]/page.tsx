@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChoiceField } from "@/components/ChoiceField";
 import { PlantView } from "@/components/PlantView";
 import { RecordTopic } from "@/components/RecordTopic";
 import { SpeciesSelect } from "@/components/SpeciesSelect";
@@ -7,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import QRCode from "qrcode";
 import { headers } from "next/headers";
 import { requireUser } from "@/lib/auth";
+import { flowerOptions, healthLabels, healthOptions, leafOptions, lifeStageOptions, optionLabel } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
 import { addRecordPhoto, generateQr, resubmit } from "../actions";
 
@@ -67,7 +69,7 @@ export default async function RecordDetail({
           <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-forest">{speciesInfo.conservation_status}</span>
         )}
         {record.health_status && (
-          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{record.health_status}</span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{optionLabel(record.health_status, healthLabels(t))}</span>
         )}
         <StatusBadge status={record.status} />
       </RecordTopic>
@@ -125,20 +127,10 @@ export default async function RecordDetail({
             <Input name="longitude" label={t.longitude} defaultValue={record.longitude} />
           </div>
           <Input name="location_name" label={t.placeName} defaultValue={record.location_name} />
-          <Input name="leaf_traits" label={t.leafTraits} defaultValue={record.leaf_traits} />
-          <Input name="flower_fruit_traits" label={t.flowerFruit} defaultValue={record.flower_fruit_traits} />
-          <label className="block text-sm">
-            {t.lifeStage}
-            <select className="mt-1 w-full rounded border px-2 py-1" name="life_stage" defaultValue={record.life_stage ?? ""}>
-              <option value="">—</option>
-              <option value="seedling">{t.lifeStageSeedling}</option>
-              <option value="sapling">{t.lifeStageSapling}</option>
-              <option value="mature">{t.lifeStageMature}</option>
-              <option value="flowering">{t.lifeStageFlowering}</option>
-              <option value="fruiting">{t.lifeStageFruiting}</option>
-            </select>
-          </label>
-          <Input name="health_status" label={t.health} defaultValue={record.health_status} />
+          <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} value={record.life_stage} otherLabel={t.otherDetail} />
+          <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} value={record.health_status} otherLabel={t.otherDetail} />
+          <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} value={record.leaf_traits} otherLabel={t.otherDetail} />
+          <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} value={record.flower_fruit_traits} otherLabel={t.otherDetail} />
           <Input name="other_traits" label={t.otherTraits} defaultValue={record.other_traits} />
           <button className="btn" type="submit">{t.submitAgain}</button>
         </form>

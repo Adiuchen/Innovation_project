@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { choiceFromForm } from "@/lib/field-choices";
 import { numberOrNull, textOrNull } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { PHOTO_TOO_LARGE, PHOTO_WRONG_TYPE, uploadPlantPhoto } from "@/lib/photos";
@@ -24,13 +25,13 @@ export async function createRecord(formData: FormData) {
     .insert({
       botanist_id: user.id,
       plant_name: textOrNull(formData.get("plant_name")),
-      life_stage: textOrNull(formData.get("life_stage")),
+      life_stage: choiceFromForm(formData, "life_stage"),
       species_id: species.id,
       height_m: numberOrNull(formData.get("height_m")),
       trunk_diameter_cm: numberOrNull(formData.get("trunk_diameter_cm")),
-      leaf_traits: textOrNull(formData.get("leaf_traits")),
-      flower_fruit_traits: textOrNull(formData.get("flower_fruit_traits")),
-      health_status: textOrNull(formData.get("health_status")),
+      leaf_traits: choiceFromForm(formData, "leaf_traits"),
+      flower_fruit_traits: choiceFromForm(formData, "flower_fruit_traits"),
+      health_status: choiceFromForm(formData, "health_status"),
       other_traits: textOrNull(formData.get("other_traits")),
       location_name: textOrNull(formData.get("location_name")),
       latitude: numberOrNull(formData.get("latitude")),
@@ -138,13 +139,13 @@ export async function resubmit(formData: FormData) {
     .from("plant_records")
     .update({
       plant_name: textOrNull(formData.get("plant_name")),
-      life_stage: textOrNull(formData.get("life_stage")),
+      life_stage: choiceFromForm(formData, "life_stage"),
       species_id: species.id,
       height_m: numberOrNull(formData.get("height_m")),
       trunk_diameter_cm: numberOrNull(formData.get("trunk_diameter_cm")),
-      leaf_traits: textOrNull(formData.get("leaf_traits")),
-      flower_fruit_traits: textOrNull(formData.get("flower_fruit_traits")),
-      health_status: textOrNull(formData.get("health_status")),
+      leaf_traits: choiceFromForm(formData, "leaf_traits"),
+      flower_fruit_traits: choiceFromForm(formData, "flower_fruit_traits"),
+      health_status: choiceFromForm(formData, "health_status"),
       other_traits: textOrNull(formData.get("other_traits")),
       location_name: textOrNull(formData.get("location_name")),
       latitude: numberOrNull(formData.get("latitude")),

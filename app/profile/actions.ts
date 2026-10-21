@@ -15,17 +15,23 @@ export type SaveEmailState = {
 export async function saveEmail(_prev: SaveEmailState, formData: FormData): Promise<SaveEmailState> {
   const { supabase, profile } = await requireUser(["botanist", "conservation_officer", "administrator"]);
   const name = String(formData.get("name") || "").trim();
-  const email = String(formData.get("email") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
 
   const { t } = await getCopy();
   if (!name) return { error: t.nameRequired };
-  if (!email.includes("@")) return { error: t.invalidEmail };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: t.invalidEmail };
 
-  const { error } = await supabase.from("profiles").update({ name, email }).eq("uuid", profile.uuid);
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ name, email })
+    .eq("uuid", profile.uuid)
+    .select("email, name")
+    .maybeSingle();
   if (error) return { error: error.message };
+  if (!data?.email) return { error: t.emailNotSaved };
 
   revalidatePath("/", "layout");
-  return { saved: true, email, name };
+  return { saved: true, email: data.email, name: data.name };
 }
 
 export async function setLocale(formData: FormData) {

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PlantGallery } from "@/components/PlantGallery";
+import { healthLabels, lifeStageLabels, optionLabel } from "@/lib/field-choices";
 import type { Copy, Locale } from "@/lib/i18n";
 
 export type PlantDetails = {
@@ -56,7 +57,7 @@ export async function PlantView({
               <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-forest">{plant.conservationStatus}</span>
             )}
             {plant.health && (
-              <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{plant.health}</span>
+              <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{optionLabel(plant.health, healthLabels(t))}</span>
             )}
           </div>
           <h1 className={`mt-3 text-3xl font-semibold ${plant.plantName ? "" : "italic"}`}>{title}</h1>
@@ -76,7 +77,7 @@ export async function PlantView({
           <Card title={t.thisSpecimen}>
             <Row label={t.plantName} value={plant.plantName} />
             <Row label={t.plantId} value={plant.plantId} />
-            <Row label={t.lifeStage} value={lifeStageLabel(plant.lifeStage, t)} />
+            <Row label={t.lifeStage} value={optionLabel(plant.lifeStage, lifeStageLabels(t))} />
             <Row label={t.place} value={plant.location} />
             <div className="grid grid-cols-[8rem_1fr] gap-3 border-t border-neutral-100 py-2 text-sm">
               <dt className="text-neutral-500">{t.coordinates}</dt>
@@ -90,7 +91,7 @@ export async function PlantView({
               </dd>
             </div>
             <Row label={t.height} value={plant.heightM != null ? `${plant.heightM} m` : null} />
-            <Row label={t.condition} value={plant.health} />
+            <Row label={t.condition} value={optionLabel(plant.health, healthLabels(t))} />
             <Row label={t.recorded} value={recorded || null} />
           </Card>
         </div>
@@ -115,18 +116,6 @@ function Row({ label, value, italic }: { label: string; value: string | null; it
       <dd className={italic && value ? "italic" : undefined}>{value || "—"}</dd>
     </div>
   );
-}
-
-function lifeStageLabel(value: string | null, t: Copy) {
-  if (!value) return null;
-  const labels: Record<string, string> = {
-    seedling: t.lifeStageSeedling,
-    sapling: t.lifeStageSapling,
-    mature: t.lifeStageMature,
-    flowering: t.lifeStageFlowering,
-    fruiting: t.lifeStageFruiting,
-  };
-  return labels[value] ?? value;
 }
 
 function formatCoordinates(latitude: number, longitude: number | null) {

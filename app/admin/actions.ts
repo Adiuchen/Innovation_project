@@ -29,7 +29,7 @@ export async function createAccount(formData: FormData) {
   const role = String(formData.get("role") || "botanist");
   const { t } = await getCopy();
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     redirect("/admin?error=" + encodeURIComponent(t.invalidEmail));
   }
 
@@ -61,7 +61,7 @@ export async function createAccount(formData: FormData) {
     uuid: data.user.id,
     id: loginId,
     name: fullName,
-    email,
+    email: email || null,
     role,
     status: "active",
   });

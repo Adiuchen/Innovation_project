@@ -3,6 +3,7 @@ import { PlantView } from "@/components/PlantView";
 import { RecordTopic } from "@/components/RecordTopic";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
+import { healthLabels, optionLabel } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
 import { reviewRecord } from "../../actions";
 
@@ -59,7 +60,7 @@ export default async function OfficerRecordPage({
           <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-forest">{species.conservation_status}</span>
         )}
         {record.health_status && (
-          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{record.health_status}</span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{optionLabel(record.health_status, healthLabels(t))}</span>
         )}
         <StatusBadge status={record.status} />
       </RecordTopic>

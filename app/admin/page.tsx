@@ -41,7 +41,7 @@ export default async function AdminPage({
         <h2 className="sm:col-span-2 font-medium">{t.createAccount}</h2>
         <p className="sm:col-span-2 text-sm text-neutral-600">{t.createAccountHint}</p>
         <input className="rounded border px-2 py-1" name="full_name" placeholder={t.fullName} required />
-        <input className="rounded border px-2 py-1" name="email" type="email" placeholder={t.email} autoComplete="email" required />
+        <input className="rounded border px-2 py-1" name="email" type="email" placeholder={t.emailOptional} autoComplete="email" />
         <input className="rounded border px-2 py-1" name="password" type="password" placeholder={t.password} minLength={6} required />
         <select className="rounded border px-2 py-1" name="role" defaultValue="botanist">
           {roles.map((role) => (

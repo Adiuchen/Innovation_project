@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { PlantView } from "@/components/PlantView";
 import { RecordTopic } from "@/components/RecordTopic";
+import { healthLabels, optionLabel } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
 
 export default async function PublicPlantPage({
@@ -45,7 +46,7 @@ export default async function PublicPlantPage({
           <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-forest">{plant.conservation_status}</span>
         )}
         {plant.health_status && (
-          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{plant.health_status}</span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">{optionLabel(plant.health_status, healthLabels(t))}</span>
         )}
       </RecordTopic>
       <div className="mt-4">

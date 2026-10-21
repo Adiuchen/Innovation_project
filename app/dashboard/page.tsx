@@ -27,9 +27,17 @@ function cards(t: Copy): Record<Profile["role"], { href: string; title: string; 
 }
 
 export default async function DashboardPage() {
-  const { profile } = await requireUser(["botanist", "conservation_officer", "administrator"]);
+  const { supabase, profile } = await requireUser(["botanist", "conservation_officer", "administrator"]);
   const { t } = await getCopy();
   const items = cards(t)[profile.role];
+  let pendingReviews = 0;
+  if (profile.role === "conservation_officer") {
+    const { count } = await supabase
+      .from("plant_records")
+      .select("uuid", { count: "exact", head: true })
+      .eq("status", "submitted");
+    pendingReviews = count ?? 0;
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -44,18 +52,26 @@ export default async function DashboardPage() {
       {profile.role === "botanist" && (
         <PrepareFieldCache readyLabel={t.fieldPhoneReady} failedLabel={t.fieldPhoneFailed} />
       )}
-      <ul className={`mt-6 grid gap-3 ${items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
-        {items.map((item) => (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              className="surface block px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <span className="font-medium">{item.title}</span>
-              <span className="mt-0.5 block text-sm leading-5 text-neutral-600">{item.text}</span>
-            </Link>
-          </li>
-        ))}
+      <ul className={`mt-6 grid items-stretch gap-3 ${items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
+        {items.map((item) => {
+          const waiting = item.href === "/officer" && pendingReviews > 0;
+          return (
+            <li key={item.href} className="h-full">
+              <Link
+                href={item.href}
+                className={`relative block h-full rounded-2xl border px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${waiting ? "border-amber-200 bg-amber-50 pr-8" : "border-emerald-950/10 bg-white"}`}
+              >
+                {waiting && (
+                  <span className="absolute right-2.5 top-2.5 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
+                    {pendingReviews}
+                  </span>
+                )}
+                <span className="font-medium">{item.title}</span>
+                <span className="mt-0.5 block text-sm leading-5 text-neutral-600">{item.text}</span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
       <UpcomingEvents limit={4} />
     </main>

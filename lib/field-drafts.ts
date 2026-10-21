@@ -1,5 +1,6 @@
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { ensureSpecies } from "@/app/botanist/actions";
+import { choiceFromForm } from "@/lib/field-choices";
 import { numberOrNull, textOrNull } from "@/lib/format";
 import { photoProblemMessage, uploadPlantPhoto } from "@/lib/photos";
 
@@ -115,7 +116,7 @@ export function draftFromForm(formData: FormData, species: CachedSpecies[]): Fie
   return {
     localId: crypto.randomUUID(),
     plantName: String(formData.get("plant_name") || ""),
-    lifeStage: String(formData.get("life_stage") || ""),
+    lifeStage: choiceFromForm(formData, "life_stage") ?? "",
     speciesId,
     speciesLabel: speciesId === "new" ? newSpeciesName : match ? `${match.id} · ${match.scientific_name}` : "",
     newSpeciesName: speciesId === "new" ? newSpeciesName : "",
@@ -124,9 +125,9 @@ export function draftFromForm(formData: FormData, species: CachedSpecies[]): Fie
     latitude: String(formData.get("latitude") || ""),
     longitude: String(formData.get("longitude") || ""),
     locationName: String(formData.get("location_name") || ""),
-    leafTraits: String(formData.get("leaf_traits") || ""),
-    flowerFruitTraits: String(formData.get("flower_fruit_traits") || ""),
-    healthStatus: String(formData.get("health_status") || ""),
+    leafTraits: choiceFromForm(formData, "leaf_traits") ?? "",
+    flowerFruitTraits: choiceFromForm(formData, "flower_fruit_traits") ?? "",
+    healthStatus: choiceFromForm(formData, "health_status") ?? "",
     otherTraits: String(formData.get("other_traits") || ""),
     photoUrl: "",
     photoCaption: String(formData.get("photo_caption") || ""),

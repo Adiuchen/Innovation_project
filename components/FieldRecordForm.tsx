@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRecord } from "@/app/botanist/actions";
+import { ChoiceField } from "@/components/ChoiceField";
 import { SpeciesSelect } from "@/components/SpeciesSelect";
 import {
   cacheSpecies,
@@ -14,6 +15,7 @@ import {
   type CachedSpecies,
   type FieldDraft,
 } from "@/lib/field-drafts";
+import { flowerOptions, healthOptions, leafOptions, lifeStageOptions } from "@/lib/field-choices";
 import type { Copy } from "@/lib/i18n";
 import { PHOTO_TOO_LARGE, PHOTO_WRONG_TYPE, photoProblemMessage } from "@/lib/photos";
 
@@ -167,21 +169,13 @@ export function FieldRecordForm({
       <section className="surface space-y-3 p-4">
         <Field name="plant_name" label={t.plantName} required />
         <SpeciesSelect key={speciesFormKey} t={t} species={choices} />
-        <label className="block text-sm">
-          {t.lifeStage}
-          <select className="mt-1 w-full rounded-lg border px-3 py-2" name="life_stage" defaultValue="">
-            <option value="">—</option>
-            <option value="seedling">{t.lifeStageSeedling}</option>
-            <option value="sapling">{t.lifeStageSapling}</option>
-            <option value="mature">{t.lifeStageMature}</option>
-            <option value="flowering">{t.lifeStageFlowering}</option>
-            <option value="fruiting">{t.lifeStageFruiting}</option>
-          </select>
-        </label>
-        <Field name="health_status" label={t.health} />
-        <Field name="leaf_traits" label={t.leafTraits} />
-        <Field name="flower_fruit_traits" label={t.flowerFruit} />
-        <Field name="other_traits" label={t.otherTraits} area />
+        <div key={speciesFormKey} className="space-y-3">
+          <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} otherLabel={t.otherDetail} />
+          <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} otherLabel={t.otherDetail} />
+          <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} otherLabel={t.otherDetail} />
+          <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} otherLabel={t.otherDetail} />
+        </div>
+        <Field name="other_traits" label={t.otherTraits} />
       </section>
       <section className="surface space-y-3 p-4">
         <div className="grid grid-cols-2 gap-3">
