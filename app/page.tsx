@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UpcomingEvents } from "@/components/UpcomingEvents";
 import { getCopy } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,6 +53,7 @@ export default async function HomePage({
           </button>
         </form>
       </section>
+      <UpcomingEvents />
       {error && <p className="mt-4 text-sm text-red-700">{error.message}</p>}
       <ul className="mt-6 grid gap-3">
         {(plants ?? []).map((item) => (

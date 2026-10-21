@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PrepareFieldCache } from "@/components/PrepareFieldCache";
+import { UpcomingEvents } from "@/components/UpcomingEvents";
 import { requireUser, type Profile } from "@/lib/auth";
 import { getCopy, statusText, type Copy } from "@/lib/i18n";
 
@@ -14,9 +15,11 @@ function cards(t: Copy): Record<Profile["role"], { href: string; title: string; 
       { href: "/officer/species", title: t.species, text: t.speciesText },
       { href: "/officer/map", title: t.map, text: t.mapText },
       { href: "/officer/iot", title: t.iot, text: t.iotText },
+      { href: "/officer/events", title: t.events, text: t.eventsText },
     ],
     administrator: [
       { href: "/admin", title: t.users, text: t.usersText },
+      { href: "/admin/events", title: t.events, text: t.adminEventsText },
       { href: "/admin/iot", title: t.iot, text: t.iotText },
     ],
     visitor: [],
@@ -41,19 +44,20 @@ export default async function DashboardPage() {
       {profile.role === "botanist" && (
         <PrepareFieldCache readyLabel={t.fieldPhoneReady} failedLabel={t.fieldPhoneFailed} />
       )}
-      <ul className="mt-6 grid gap-4 sm:grid-cols-2">
+      <ul className={`mt-6 grid gap-3 ${items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
         {items.map((item) => (
           <li key={item.href}>
             <Link
               href={item.href}
-              className="surface block p-5 transition hover:-translate-y-0.5 hover:shadow-md"
+              className="surface block px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <span className="font-medium text-lg">{item.title}</span>
-              <span className="mt-1 block text-sm text-neutral-600">{item.text}</span>
+              <span className="font-medium">{item.title}</span>
+              <span className="mt-0.5 block text-sm leading-5 text-neutral-600">{item.text}</span>
             </Link>
           </li>
         ))}
       </ul>
+      <UpcomingEvents limit={4} />
     </main>
   );
 }

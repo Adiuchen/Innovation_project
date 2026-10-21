@@ -67,6 +67,7 @@ async function loadNotices(
         href: `/botanist/${record.uuid}`,
         title: `${record.id} · ${record.plant_name || species?.scientific_name || t.unidentified}`,
         detail: record.status === "rejected" ? t.noticeRejected : t.noticeRevision,
+        tone: record.status === "rejected" ? "rejected" : "revision",
       };
     });
   }
@@ -85,6 +86,7 @@ async function loadNotices(
         href: `/officer/records/${record.uuid}`,
         title: `${record.id} · ${record.plant_name || species?.scientific_name || t.unidentified}`,
         detail: t.submitted,
+        tone: "submitted",
       };
     });
   }
@@ -101,6 +103,7 @@ async function loadNotices(
       href: "/admin/iot",
       title: statusText(alert.alert_type, t),
       detail: alert.message,
+      tone: "alert",
     }));
   }
 

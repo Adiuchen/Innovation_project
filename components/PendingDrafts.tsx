@@ -27,7 +27,7 @@ export function PendingDrafts({ t }: { t: Copy }) {
   if (drafts.length === 0 && !message) return null;
 
   return (
-    <section className="surface mt-4 p-4 text-sm">
+    <section className="surface mt-4 shrink-0 p-4 text-sm">
       <h2 className="font-medium">
         {t.pendingUploads} ({drafts.length})
       </h2>

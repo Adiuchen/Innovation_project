@@ -2,6 +2,7 @@ import { getCopy, statusText } from "@/lib/i18n";
 
 const tones: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-900",
+  published: "bg-emerald-100 text-emerald-900",
   active: "bg-emerald-100 text-emerald-900",
   online: "bg-emerald-100 text-emerald-900",
   resolved: "bg-emerald-100 text-emerald-900",
@@ -11,6 +12,7 @@ const tones: Record<string, string> = {
   needs_revision: "bg-orange-100 text-orange-900",
   draft: "bg-neutral-100 text-neutral-700",
   rejected: "bg-red-100 text-red-800",
+  cancelled: "bg-red-100 text-red-800",
   suspended: "bg-red-100 text-red-800",
   offline: "bg-red-100 text-red-800",
   possible_theft: "bg-red-100 text-red-800",
