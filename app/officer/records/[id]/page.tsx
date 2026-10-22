@@ -45,6 +45,7 @@ export default async function OfficerRecordPage({
   const species = Array.isArray(record.species) ? record.species[0] : record.species;
   const botanist = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
   const canDecide = record.status === "submitted" || record.status === "needs_revision";
+  const earlierNote = record.status === "submitted" ? record.review_note : null;
   const listQuery = new URLSearchParams({ status, q }).toString();
   const here = `/officer/records/${record.uuid}?${listQuery}`;
 
@@ -97,19 +98,26 @@ export default async function OfficerRecordPage({
           <Info label={t.description} value={species?.description} />
           <Info label={t.ecology} value={species?.ecological_info} />
           <Info label={t.cultural} value={species?.cultural_significance} />
-          {record.review_note && <Info label={t.officerNote} value={record.review_note} />}
+          {record.review_note && !earlierNote ? <Info label={t.officerNote} value={record.review_note} /> : null}
         </dl>
 
         {canDecide && (
           <form action={reviewRecord} className="mt-6 space-y-2 border-t pt-4">
             <input type="hidden" name="id" value={record.uuid} />
             <input type="hidden" name="next" value={here} />
+            {earlierNote ? (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                <span className="font-medium">{t.earlierNote}</span>
+                <span className="mt-1 block whitespace-pre-wrap">{earlierNote}</span>
+                <span className="mt-1 block text-xs text-amber-800">{t.earlierNoteHint}</span>
+              </p>
+            ) : null}
             <textarea
               className="w-full rounded border px-2 py-1"
               name="review_note"
               rows={3}
               placeholder={t.noteToBotanist}
-              defaultValue={record.review_note ?? ""}
+              defaultValue={earlierNote ? "" : (record.review_note ?? "")}
             />
             <div className="flex flex-wrap gap-2">
               <button className="btn" name="status" value="approved">

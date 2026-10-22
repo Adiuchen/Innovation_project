@@ -5,6 +5,10 @@ export function numberOrNull(value: FormDataEntryValue | string | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export function isGmailAddress(email: string) {
+  return /^[^\s@]+@gmail\.com$/.test(email.trim().toLowerCase());
+}
+
 export function textOrNull(value: FormDataEntryValue | string | null) {
   const text = String(value ?? "").trim();
   return text || null;

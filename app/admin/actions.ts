@@ -3,7 +3,7 @@
 import { createClient as createAuthClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { numberOrNull, textOrNull } from "@/lib/format";
+import { isGmailAddress, numberOrNull, textOrNull } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 
 function authEmail(loginId: string) {
@@ -29,8 +29,8 @@ export async function createAccount(formData: FormData) {
   const role = String(formData.get("role") || "botanist");
   const { t } = await getCopy();
 
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    redirect("/admin?error=" + encodeURIComponent(t.invalidEmail));
+  if (email && !isGmailAddress(email)) {
+    redirect("/admin?error=" + encodeURIComponent(t.gmailRequired));
   }
 
   if (role !== "botanist" && role !== "conservation_officer") {

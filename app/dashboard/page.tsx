@@ -9,9 +9,11 @@ function cards(t: Copy): Record<Profile["role"], { href: string; title: string; 
     botanist: [
       { href: "/botanist", title: t.myRecords, text: t.myRecordsText },
       { href: "/botanist/new", title: t.newRecord, text: t.newRecordText },
+      { href: "/botanist/plants", title: t.viewPlants, text: t.viewPlantsText },
     ],
     conservation_officer: [
       { href: "/officer", title: t.reviewRecords, text: t.reviewRecordsText },
+      { href: "/officer/plants", title: t.viewPlants, text: t.viewPlantsText },
       { href: "/officer/species", title: t.species, text: t.speciesText },
       { href: "/officer/map", title: t.map, text: t.mapText },
       { href: "/officer/iot", title: t.iot, text: t.iotText },
@@ -52,7 +54,7 @@ export default async function DashboardPage() {
       {profile.role === "botanist" && (
         <PrepareFieldCache readyLabel={t.fieldPhoneReady} failedLabel={t.fieldPhoneFailed} />
       )}
-      <ul className={`mt-6 grid items-stretch gap-3 ${items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
+      <ul className={`mt-6 grid items-stretch gap-3 ${items.length >= 6 ? "grid-cols-2 lg:grid-cols-3" : items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
         {items.map((item) => {
           const waiting = item.href === "/officer" && pendingReviews > 0;
           return (

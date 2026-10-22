@@ -37,7 +37,12 @@ export default async function OfficerHome({
         backHref="/dashboard"
         backLabel={t.backPage}
         title={t.reviewRecords}
-        extra={<a className="text-sm underline" href="/officer/report">{t.exportCsv}</a>}
+        extra={
+          <div className="flex flex-wrap items-center gap-3">
+            <Link className="rounded-full border border-emerald-950/15 bg-white px-3 py-1.5 text-sm" href="/officer/plants">{t.viewPlants}</Link>
+            <a className="text-sm underline" href="/officer/report">{t.exportCsv}</a>
+          </div>
+        }
       />
       {(error || queryError) && (
         <p className="mt-3 text-sm text-red-700">{error || queryError?.message}</p>
@@ -60,6 +65,7 @@ export default async function OfficerHome({
           const botanist = Array.isArray(record.profiles) ? record.profiles[0] : record.profiles;
           const reviewHref = `/officer/records/${record.uuid}?${new URLSearchParams({ status, q }).toString()}`;
           const canDecide = record.status === "submitted" || record.status === "needs_revision";
+          const earlierNote = record.status === "submitted" ? record.review_note : null;
           return (
             <article key={record.uuid} className="surface p-4">
               <h2 className="font-medium">{record.id} · {record.plant_name || species?.scientific_name || t.unidentified}</h2>
@@ -74,7 +80,20 @@ export default async function OfficerHome({
               {canDecide ? (
                 <form action={reviewRecord} className="mt-3 space-y-2">
                   <input type="hidden" name="id" value={record.uuid} />
-                  <textarea className="w-full rounded border px-2 py-1" name="review_note" rows={2} placeholder={t.noteToBotanist} defaultValue={record.review_note ?? ""} />
+                  {earlierNote ? (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                      <span className="font-medium">{t.earlierNote}</span>
+                      <span className="mt-1 block whitespace-pre-wrap">{earlierNote}</span>
+                      <span className="mt-1 block text-xs text-amber-800">{t.earlierNoteHint}</span>
+                    </p>
+                  ) : null}
+                  <textarea
+                    className="w-full rounded border px-2 py-1"
+                    name="review_note"
+                    rows={2}
+                    placeholder={t.noteToBotanist}
+                    defaultValue={earlierNote ? "" : (record.review_note ?? "")}
+                  />
                   <div className="flex flex-wrap gap-2">
                     <Link className="inline-flex items-center rounded border border-forest px-3 py-1 text-sm font-semibold text-forest" href={reviewHref}>{t.reviewFull}</Link>
                     <button className="btn" name="status" value="approved">{t.approve}</button>

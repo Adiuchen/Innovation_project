@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
+import { isGmailAddress } from "@/lib/format";
 import { getCopy, type Locale } from "@/lib/i18n";
 
 export type SaveEmailState = {
@@ -19,7 +20,7 @@ export async function saveEmail(_prev: SaveEmailState, formData: FormData): Prom
 
   const { t } = await getCopy();
   if (!name) return { error: t.nameRequired };
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: t.invalidEmail };
+  if (!isGmailAddress(email)) return { error: t.gmailRequired };
 
   const { data, error } = await supabase
     .from("profiles")

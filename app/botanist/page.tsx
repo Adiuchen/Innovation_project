@@ -1,17 +1,16 @@
 import Link from "next/link";
-import { RecordSort } from "@/app/botanist/RecordSort";
+import { RecordSort, type FieldRecordRow } from "@/app/botanist/RecordSort";
 import { PageHeading } from "@/components/PageHeading";
 import { PendingDrafts } from "@/components/PendingDrafts";
-import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
-import { getCopy } from "@/lib/i18n";
+import { getCopy, statusText } from "@/lib/i18n";
 
 export default async function BotanistHome({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sort?: string }>;
+  searchParams: Promise<{ error?: string; sort?: string; q?: string }>;
 }) {
-  const { error: actionError, sort: requestedSort } = await searchParams;
+  const { error: actionError, sort: requestedSort, q = "" } = await searchParams;
   const { supabase, user } = await requireUser(["botanist"]);
   const { t } = await getCopy();
   const sort = ["newest", "oldest", "name", "place", "status"].includes(requestedSort ?? "")
@@ -34,6 +33,20 @@ export default async function BotanistHome({
     if (sort === "status") return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
     return b.recorded_at.localeCompare(a.recorded_at);
   });
+  const rows: FieldRecordRow[] = sorted.map((record) => {
+    const species = Array.isArray(record.species) ? record.species[0] : record.species;
+    return {
+      uuid: record.uuid,
+      id: record.id,
+      title: `${record.id} · ${record.plant_name || species?.scientific_name || t.unidentified}`,
+      place: record.location_name || "—",
+      status: record.status,
+      statusLabel: statusText(record.status, t),
+      review: record.review_note || "—",
+      attention: record.status === "needs_revision" || record.status === "rejected",
+      search: `${record.id} ${record.plant_name ?? ""} ${species?.scientific_name ?? ""}`.toLowerCase(),
+    };
+  });
 
   return (
     <main className="mx-auto flex h-[calc(100dvh-4.5rem)] max-w-5xl flex-col px-4">
@@ -41,7 +54,12 @@ export default async function BotanistHome({
         backHref="/dashboard"
         backLabel={t.backPage}
         title={t.fieldRecords}
-        extra={<Link className="btn" href="/botanist/new">{t.newRecord}</Link>}
+        extra={
+          <div className="flex flex-wrap gap-2">
+            <Link className="rounded-full border border-emerald-950/15 bg-white px-3 py-1.5 text-sm" href="/botanist/plants">{t.viewPlants}</Link>
+            <Link className="btn" href="/botanist/new">{t.newRecord}</Link>
+          </div>
+        }
       />
       {(error || actionError) && <p className="shrink-0 text-sm text-red-700">{error?.message || actionError}</p>}
       <PendingDrafts t={t} />
@@ -68,7 +86,12 @@ export default async function BotanistHome({
       )}
       <RecordSort
         sort={sort}
+        query={q}
         label={t.sortBy}
+        placeholder={t.searchPlants}
+        emptyLabel={t.noSpeciesYet}
+        noMatchesLabel={t.noRecordMatches}
+        columns={{ name: t.plantName, place: t.place, status: t.status, review: t.review }}
         options={[
           { value: "newest", label: t.newest },
           { value: "oldest", label: t.oldest },
@@ -76,36 +99,8 @@ export default async function BotanistHome({
           { value: "place", label: t.place },
           { value: "status", label: t.status },
         ]}
+        rows={rows}
       />
-      <div className="mt-4 mb-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-emerald-950/15 bg-white shadow-sm">
-        <div className="h-full overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10">
-              <tr className="border-b bg-emerald-50 text-left text-forest">
-                <th className="p-3 font-medium">{t.plantName}</th>
-                <th className="p-3 font-medium">{t.place}</th>
-                <th className="p-3 font-medium">{t.status}</th>
-                <th className="p-3 font-medium">{t.review}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((record) => {
-                const species = Array.isArray(record.species) ? record.species[0] : record.species;
-                return (
-                  <tr key={record.id} className={`border-b last:border-0 ${record.status === "needs_revision" || record.status === "rejected" ? "bg-amber-50" : ""}`}>
-                    <td className="p-3">
-                      <Link className="font-medium hover:underline" href={`/botanist/${record.uuid}`}>{record.id} · {record.plant_name || species?.scientific_name || t.unidentified}</Link>
-                    </td>
-                    <td className="p-3">{record.location_name || "—"}</td>
-                    <td className="p-3"><StatusBadge status={record.status} /></td>
-                    <td className="p-3">{record.review_note || "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </main>
   );
 }

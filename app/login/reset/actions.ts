@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isGmailAddress } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import {
   consumeExpired,
@@ -30,7 +31,7 @@ function normalizeEmail(value: FormDataEntryValue | null) {
 }
 
 function validEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return isGmailAddress(email);
 }
 
 async function setResetCookie(id: string) {
@@ -46,7 +47,7 @@ async function setResetCookie(id: string) {
 export async function requestResetCode(_prev: ResetState, formData: FormData): Promise<ResetState> {
   const { t } = await getCopy();
   const email = normalizeEmail(formData.get("email"));
-  if (!validEmail(email)) return { error: t.invalidEmail };
+  if (!validEmail(email)) return { error: t.gmailRequired };
 
   const sent = await sendResetCode(email);
   if ("error" in sent) {

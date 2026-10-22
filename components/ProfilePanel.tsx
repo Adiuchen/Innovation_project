@@ -132,6 +132,7 @@ export function ProfilePanel({
               className="mt-1 w-full rounded-lg border border-white/15 bg-white px-2 py-1.5 text-sm text-ink"
               name="email"
               type="email"
+              placeholder="name@gmail.com"
               defaultValue={email ?? ""}
               key={email ?? ""}
               required
