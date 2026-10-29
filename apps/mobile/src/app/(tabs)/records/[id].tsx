@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { PhotoGallery } from "@/components/PhotoGallery";
+import { PrintQrButton } from "@/components/PrintQrButton";
 import { Badge, Button, Fact, Notice, Screen } from "@/components/ui";
 import { RecordForm } from "@/components/RecordForm";
 import { getRecord } from "@/lib/db";
@@ -141,6 +142,7 @@ export default function RecordDetailScreen() {
           <QRCode value={qrValue} size={180} />
           <Text style={styles.meta}>{record.qr_code}</Text>
           <Text style={styles.meta}>{qrValue}</Text>
+          <PrintQrButton qrCode={record.qr_code} />
           {!siteUrl && (
             <Notice tone="warn">
               Set EXPO_PUBLIC_SITE_URL to the website address so a printed tag opens the public plant page. This code can already be scanned inside the app.

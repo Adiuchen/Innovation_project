@@ -2,14 +2,20 @@ import { createRequire } from "node:module";
 import type net from "node:net";
 
 const require = createRequire(import.meta.url);
+const QRCode = require("qrcode") as {
+  create: (text: string, options: { errorCorrectionLevel: "M" }) => {
+    modules: { size: number; get: (row: number, col: number) => number };
+  };
+};
 
 type EscposPrinter = {
+  hardware: (hw: string) => EscposPrinter;
   font: (name: string) => EscposPrinter;
   align: (value: "ct" | "lt") => EscposPrinter;
   style: (value: string) => EscposPrinter;
   size: (width: number, height: number) => EscposPrinter;
   text: (value: string) => EscposPrinter;
-  qrcode: (code: string, version: number, level: string, size: number) => EscposPrinter;
+  print: (value: Buffer) => EscposPrinter;
   newLine: () => EscposPrinter;
   cut: () => EscposPrinter;
   close: (callback?: (error?: unknown) => void) => void;
@@ -57,10 +63,12 @@ export async function printPlantQr(input: { url: string; label: string }) {
         return;
       }
       try {
-        printer.font("A").align("ct").style("normal").size(1, 1);
-        printer.text(input.label);
-        printer.qrcode(input.url, qrVersion(input.url), "M", 8);
-        printer.newLine().cut().close((closeError) => {
+        printer.hardware("init").font("A").align("ct").style("normal");
+        printer.size(2, 2).text(input.label);
+        printer.newLine().newLine();
+        printer.print(qrImage(input.url));
+        printer.newLine().newLine().newLine();
+        printer.cut().close((closeError) => {
           finish(closeError ?? undefined);
         });
       } catch (err) {
@@ -71,11 +79,42 @@ export async function printPlantQr(input: { url: string; label: string }) {
   });
 }
 
-function qrVersion(text: string) {
-  const bytes = Buffer.byteLength(text, "utf8");
-  if (bytes <= 50) return 4;
-  if (bytes <= 70) return 5;
-  if (bytes <= 100) return 6;
-  if (bytes <= 140) return 8;
-  return 10;
+function qrImage(text: string) {
+  const symbol = QRCode.create(text, { errorCorrectionLevel: "M" });
+  const count = symbol.modules.size;
+  const quiet = 2;
+  let scale = 9;
+  while ((count + quiet * 2) * scale > 384 && scale > 3) scale -= 1;
+  const dots = (count + quiet * 2) * scale;
+  const bands = Math.ceil(dots / 24);
+  const parts = [Buffer.from([0x1b, 0x33, 24])];
+
+  for (let band = 0; band < bands; band += 1) {
+    const slice = Buffer.alloc(dots * 3);
+    for (let x = 0; x < dots; x += 1) {
+      for (let bit = 0; bit < 24; bit += 1) {
+        const y = band * 24 + bit;
+        if (y >= dots || !qrDark(symbol.modules, count, quiet, scale, x, y)) continue;
+        slice[x * 3 + (bit >> 3)] |= 0x80 >> (bit & 7);
+      }
+    }
+    parts.push(Buffer.from([0x1b, 0x2a, 0x21, dots & 0xff, (dots >> 8) & 0xff]), slice, Buffer.from([0x0a]));
+  }
+
+  parts.push(Buffer.from([0x1b, 0x32]));
+  return Buffer.concat(parts);
+}
+
+function qrDark(
+  modules: { get: (row: number, col: number) => number },
+  count: number,
+  quiet: number,
+  scale: number,
+  x: number,
+  y: number,
+) {
+  const column = Math.floor(x / scale) - quiet;
+  const row = Math.floor(y / scale) - quiet;
+  if (column < 0 || row < 0 || column >= count || row >= count) return false;
+  return Boolean(modules.get(row, column));
 }

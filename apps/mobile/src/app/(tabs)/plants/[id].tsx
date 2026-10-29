@@ -3,6 +3,7 @@ import ApprovedPlantsScreen from "@/app/(tabs)/plants/index";
 import { useEffect, useState } from "react";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import { PhotoGallery } from "@/components/PhotoGallery";
+import { PrintQrButton } from "@/components/PrintQrButton";
 import { Button, Notice, Screen } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { choiceLabel, firstParam, formatWhen, healthChoices, lifeStageChoices } from "@/lib/plant";
@@ -99,6 +100,7 @@ function ApprovedPlantBody({ plantId }: { plantId: string }) {
           />
         ) : null}
       </View>
+      <PrintQrButton qrCode={plant.qr_code} />
     </Screen>
   );
 }

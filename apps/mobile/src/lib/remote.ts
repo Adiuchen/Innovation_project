@@ -1,6 +1,6 @@
 import { uploadPlantPhoto } from "@/lib/photos";
 import { numberOrNull, qrCodeForRecord, textOrNull } from "@/lib/plant";
-import { supabase } from "@/lib/supabase";
+import { siteUrl, supabase } from "@/lib/supabase";
 import type { FieldInput } from "@/types";
 
 export async function resubmitRecord(userId: string, recordId: string, input: FieldInput) {
@@ -46,4 +46,27 @@ export async function generateRecordQr(recordId: string) {
   const { error } = await supabase.from("plant_records").update({ qr_code: code }).eq("uuid", recordId);
   if (error) return { code: null, error: error.message };
   return { code, error: null };
+}
+
+export async function printPlantQr(qrCode: string) {
+  if (!siteUrl) return "Set EXPO_PUBLIC_SITE_URL to the website address before printing.";
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return "Sign in again before printing.";
+
+  try {
+    const response = await fetch(`${siteUrl}/api/print/plant-qr`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ qrCode }),
+    });
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) return body?.error || "printer";
+    return null;
+  } catch {
+    return "printer";
+  }
 }

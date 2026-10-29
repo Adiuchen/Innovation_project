@@ -41,7 +41,9 @@ const en = {
   logoutHint: "Log out is only available here.",
   photoLibrary: "Photo library permission is required to change your photo.",
   field: "Field",
+  homeTab: "Home",
   recordsTab: "Records",
+  plantsTab: "Plants",
   speciesTab: "Species",
   scanTab: "Scan",
   chinese: "华语",
@@ -99,6 +101,11 @@ const en = {
   photoCamera: "Camera permission is required.",
   takePhoto: "Take photo",
   choosePhoto: "Choose photo",
+  printQr: "Print QR",
+  printingQr: "Printing…",
+  qrPrinted: "QR sent to the printer.",
+  qrPrintFailed: "The printer did not print. Check that it is on and on this network.",
+  printQrOffline: "Connect to the network before printing.",
 };
 
 const zh: typeof en = {
@@ -142,7 +149,9 @@ const zh: typeof en = {
   logoutHint: "只能在这里退出登录。",
   photoLibrary: "需要相册权限才能更换头像。",
   field: "现场",
+  homeTab: "首页",
   recordsTab: "记录",
+  plantsTab: "植物",
   speciesTab: "物种",
   scanTab: "扫描",
   chinese: "华语",
@@ -200,6 +209,11 @@ const zh: typeof en = {
   photoCamera: "需要相机权限。",
   takePhoto: "拍照",
   choosePhoto: "从相册选择",
+  printQr: "打印二维码",
+  printingQr: "正在打印…",
+  qrPrinted: "二维码已发送到打印机。",
+  qrPrintFailed: "打印机没有打印。请确认它已开机并在同一网络。",
+  printQrOffline: "请先连接网络再打印。",
 };
 
 const ms: typeof en = {
@@ -243,7 +257,9 @@ const ms: typeof en = {
   logoutHint: "Log keluar hanya ada di sini.",
   photoLibrary: "Kebenaran galeri diperlukan untuk menukar gambar.",
   field: "Lapangan",
+  homeTab: "Utama",
   recordsTab: "Rekod",
+  plantsTab: "Tumbuhan",
   speciesTab: "Spesies",
   scanTab: "Imbas",
   chinese: "华语",
@@ -301,6 +317,11 @@ const ms: typeof en = {
   photoCamera: "Kebenaran kamera diperlukan.",
   takePhoto: "Ambil gambar",
   choosePhoto: "Pilih gambar",
+  printQr: "Cetak kod QR",
+  printingQr: "Mencetak…",
+  qrPrinted: "Kod QR dihantar ke pencetak.",
+  qrPrintFailed: "Pencetak tidak mencetak. Pastikan ia dihidupkan dan berada pada rangkaian ini.",
+  printQrOffline: "Sambung ke rangkaian sebelum mencetak.",
 };
 
 const copies = { en, zh, ms };

@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, ScanTabIcon } from "@/components/TabIcon";
 import { usePreferences } from "@/lib/preferences";
 
 export const unstable_settings = {
@@ -28,12 +29,24 @@ export default function TabLayout() {
         tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
       }}
     >
-      <Tabs.Screen name="field" options={{ title: t.field }} />
-      <Tabs.Screen name="records" options={{ title: t.recordsTab }} />
-      <Tabs.Screen name="species" options={{ title: t.speciesTab }} />
-      <Tabs.Screen name="scan" options={{ title: t.scanTab }} />
+      <Tabs.Screen
+        name="field"
+        options={{ title: t.homeTab, tabBarIcon: ({ color, size }) => <HomeTabIcon color={color} size={size} /> }}
+      />
+      <Tabs.Screen
+        name="records"
+        options={{ title: t.recordsTab, tabBarIcon: ({ color, size }) => <RecordsTabIcon color={color} size={size} /> }}
+      />
+      <Tabs.Screen
+        name="plants"
+        options={{ title: t.plantsTab, tabBarIcon: ({ color, size }) => <PlantsTabIcon color={color} size={size} /> }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{ title: t.scanTab, tabBarIcon: ({ color, size }) => <ScanTabIcon color={color} size={size} /> }}
+      />
+      <Tabs.Screen name="species" options={offTabBar} />
       <Tabs.Screen name="events" options={offTabBar} />
-      <Tabs.Screen name="plants" options={offTabBar} />
     </Tabs>
   );
 }

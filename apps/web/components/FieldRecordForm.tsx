@@ -168,8 +168,8 @@ export function FieldRecordForm({
       </section>
       <section className="surface space-y-3 p-4">
         <Field name="plant_name" label={t.plantName} required />
-        <SpeciesSelect key={speciesFormKey} t={t} species={choices} />
-        <div key={speciesFormKey} className="space-y-3">
+        <SpeciesSelect key={`species-${speciesFormKey}`} t={t} species={choices} />
+        <div key={`traits-${speciesFormKey}`} className="space-y-3">
           <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} otherLabel={t.otherDetail} />
           <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} otherLabel={t.otherDetail} />
           <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} otherLabel={t.otherDetail} />
