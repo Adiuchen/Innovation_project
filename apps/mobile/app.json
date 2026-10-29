@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Plant Records",
+    "slug": "plant-records",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "plantrecords",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.plantrecords.field"
+    },
+    "android": {
+      "package": "com.plantrecords.field",
+      "adaptiveIcon": {
+        "backgroundColor": "#1e4d38",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-image",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Plant Records to scan plant tags and photograph specimens.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Plant Records to attach a photograph of the plant.",
+          "cameraPermission": "Allow Plant Records to photograph the plant.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Plant Records to save the GPS position of the plant."
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
+}
