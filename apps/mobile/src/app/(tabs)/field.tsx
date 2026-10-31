@@ -84,7 +84,11 @@ export default function FieldHome() {
             <Text style={styles.primaryText}>{t.registerPlant}</Text>
           </Pressable>
         ) : (
-          <Notice>Field records are collected by botanists. You can search the species guide, scan plant tags, and read upcoming events.</Notice>
+          <Notice>
+            {profile.role === "guide"
+              ? "Park guide: scan a plant tag or search the species guide to share plant facts and stories with visitors."
+              : "Field records are collected by botanists. You can search the species guide, scan plant tags, and read upcoming events."}
+          </Notice>
         )}
 
         <UpcomingEvents

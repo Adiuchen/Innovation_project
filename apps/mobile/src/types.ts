@@ -1,4 +1,4 @@
-export type Role = "botanist" | "conservation_officer" | "administrator" | "visitor";
+export type Role = "botanist" | "conservation_officer" | "administrator" | "guide" | "visitor";
 
 export type Profile = {
   uuid: string;
@@ -30,6 +30,14 @@ export type Species = {
   photos: PhotoRef[];
 };
 
+/** A photograph attached in the field. `remote_url` is set once it has reached storage. */
+export type LocalPhoto = {
+  id: string;
+  uri: string;
+  caption: string;
+  remote_url: string | null;
+};
+
 export type Draft = {
   local_id: string;
   user_id: string;
@@ -50,6 +58,8 @@ export type Draft = {
   photo_uri: string | null;
   photo_caption: string;
   photo_remote_url: string | null;
+  /** Every photo. Drafts loaded from the phone always have it; older code may leave it out. */
+  photos?: LocalPhoto[];
   status: "draft" | "submitted";
   saved_at: string;
   sync_error: string | null;
@@ -109,7 +119,9 @@ export type FieldInput = {
   flower_fruit_traits: string;
   health_status: string;
   other_traits: string;
+  /** First photo, kept for older screens. `photos` holds every photo. */
   photo_uri: string | null;
   photo_caption: string;
+  photos: LocalPhoto[];
   status: "draft" | "submitted";
 };

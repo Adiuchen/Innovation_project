@@ -26,16 +26,18 @@ export async function resubmitRecord(userId: string, recordId: string, input: Fi
 
   if (error) return error.message;
 
-  if (input.photo_uri && !input.photo_uri.startsWith("http")) {
-    const uploaded = await uploadPlantPhoto(userId, `${recordId}-${Date.now()}`, input.photo_uri);
+  // Photos already in the central database have remote_url set; only new ones are uploaded.
+  for (const photo of input.photos ?? []) {
+    if (photo.remote_url) continue;
+    const uploaded = await uploadPlantPhoto(userId, `${recordId}-${photo.id}`, photo.uri);
     if (!uploaded.url) return uploaded.error ?? "Could not upload the photograph.";
-    const photo = await supabase.from("plant_photos").insert({
+    const inserted = await supabase.from("plant_photos").insert({
       plant_record_id: recordId,
       storage_path: uploaded.url,
-      caption: textOrNull(input.photo_caption),
+      caption: textOrNull(photo.caption),
       uploaded_by: userId,
     });
-    if (photo.error) return photo.error.message;
+    if (inserted.error) return inserted.error.message;
   }
 
   return null;

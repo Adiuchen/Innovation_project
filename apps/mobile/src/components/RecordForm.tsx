@@ -15,10 +15,11 @@ import * as Location from "expo-location";
 import { PlantPhoto } from "@/components/PlantPhoto";
 import { Button, Field, Notice } from "@/components/ui";
 import { listSpecies } from "@/lib/db";
+import { newId } from "@/lib/id";
 import { copyPhotoIntoApp } from "@/lib/photos";
 import { fieldProblems, flowerChoices, healthChoices, leafChoices, lifeStageChoices, speciesTitle, type ChoiceOption } from "@/lib/plant";
 import { colors } from "@/theme";
-import type { FieldInput, Species } from "@/types";
+import type { FieldInput, LocalPhoto, Species } from "@/types";
 
 const emptyInput: FieldInput = {
   species_id: null,
@@ -36,8 +37,18 @@ const emptyInput: FieldInput = {
   other_traits: "",
   photo_uri: null,
   photo_caption: "",
+  photos: [],
   status: "submitted",
 };
+
+// Older callers pass a single photo_uri; turn it into the photo list.
+function initialPhotos(initial?: Partial<FieldInput>): LocalPhoto[] {
+  if (initial?.photos) return initial.photos;
+  if (initial?.photo_uri) {
+    return [{ id: "first", uri: initial.photo_uri, caption: initial.photo_caption ?? "", remote_url: null }];
+  }
+  return [];
+}
 
 export function RecordForm({
   localId,
@@ -57,6 +68,7 @@ export function RecordForm({
     ...initial,
     plant_name: initial?.plant_name ?? "",
     life_stage: initial?.life_stage ?? "",
+    photos: initialPhotos(initial),
   });
   const [species, setSpecies] = useState<Species[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -152,21 +164,46 @@ export function RecordForm({
     const result =
       source === "camera"
         ? await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.6 })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.6 });
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: "images",
+            quality: 0.6,
+            allowsMultipleSelection: true,
+            selectionLimit: 0,
+          });
     if (result.canceled) return;
-    const uri = result.assets[0]?.uri;
-    if (!uri) return;
-    try {
-      const stored = await copyPhotoIntoApp(localId, uri);
-      patch({ photo_uri: stored });
-    } catch {
-      patch({ photo_uri: uri });
-      setMessage("The photo is attached, but it could not be copied into the field book folder.");
+
+    const added: LocalPhoto[] = [];
+    let copyFailed = false;
+    for (const asset of result.assets) {
+      if (!asset.uri) continue;
+      const id = newId();
+      try {
+        const stored = await copyPhotoIntoApp(`${localId}-${id}`, asset.uri);
+        added.push({ id, uri: stored, caption: "", remote_url: null });
+      } catch {
+        added.push({ id, uri: asset.uri, caption: "", remote_url: null });
+        copyFailed = true;
+      }
     }
+    if (added.length === 0) return;
+    setInput((current) => ({ ...current, photos: [...current.photos, ...added] }));
+    if (copyFailed) setMessage("A photo is attached, but it could not be copied into the field book folder.");
+  }
+
+  function updatePhoto(id: string, values: Partial<LocalPhoto>) {
+    setInput((current) => ({
+      ...current,
+      photos: current.photos.map((photo) => (photo.id === id ? { ...photo, ...values } : photo)),
+    }));
+  }
+
+  function removePhoto(id: string) {
+    setInput((current) => ({ ...current, photos: current.photos.filter((photo) => photo.id !== id) }));
   }
 
   async function submit(status: FieldInput["status"] = input.status) {
-    const next = { ...input, status };
+    const first = input.photos[0];
+    const next = { ...input, status, photo_uri: first?.uri ?? null, photo_caption: first?.caption ?? "" };
     const problems = fieldProblems(next);
     if (problems.length > 0) {
       setMessage(problems[0] ?? "Check the measurements.");
@@ -221,24 +258,51 @@ export function RecordForm({
       <ChoiceField label="Flower or fruit" value={input.flower_fruit_traits} options={flowerChoices} onChange={(flower_fruit_traits) => patch({ flower_fruit_traits })} />
       <ChoiceField label="Health" value={input.health_status} options={healthChoices} onChange={(health_status) => patch({ health_status })} />
       <Field label="Other traits" value={input.other_traits} onChangeText={(other_traits) => patch({ other_traits })} multiline />
-      {input.photo_uri ? (
-        <View style={styles.photoBlock}>
-          <PlantPhoto photo={{ storage_path: input.photo_uri, caption: null }} showCaption={false} height={200} radius={20} />
-          <Field label="Photo caption" value={input.photo_caption} onChangeText={(photo_caption) => patch({ photo_caption })} />
-          <Pressable accessibilityRole="button" onPress={() => patch({ photo_uri: null })} hitSlop={8}>
-            <Text style={styles.remove}>Remove photograph</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Button label="Take photo" tone="secondary" onPress={() => takePhoto("camera")} />
+      <Text style={styles.pickerLabel}>
+        Photographs{input.photos.length > 0 ? ` (${input.photos.length})` : ""}
+      </Text>
+      {input.photos.map((photo, index) => {
+        // In revise mode, photos already in the central database cannot be removed or re-captioned here.
+        const saved = mode === "revise" && photo.remote_url != null;
+        return (
+          <View key={photo.id} style={styles.photoBlock}>
+            <PlantPhoto photo={{ storage_path: photo.uri, caption: null }} showCaption={false} height={200} radius={20} />
+            {saved ? (
+              <Text style={styles.accuracy}>
+                Photo {index + 1} · already uploaded{photo.caption ? ` · ${photo.caption}` : ""}
+              </Text>
+            ) : (
+              <>
+                <Field
+                  label={`Photo ${index + 1} caption`}
+                  value={photo.caption}
+                  onChangeText={(caption) => updatePhoto(photo.id, { caption })}
+                  placeholder="Leaf, flower, bark, whole plant…"
+                />
+                <Pressable accessibilityRole="button" onPress={() => removePhoto(photo.id)} hitSlop={8}>
+                  <Text style={styles.remove}>Remove photo {index + 1}</Text>
+                </Pressable>
+              </>
+            )}
           </View>
-          <View style={styles.half}>
-            <Button label="Choose photo" tone="secondary" onPress={() => takePhoto("library")} />
-          </View>
+        );
+      })}
+      <View style={styles.row}>
+        <View style={styles.half}>
+          <Button
+            label={input.photos.length > 0 ? "Take another" : "Take photo"}
+            tone="secondary"
+            onPress={() => takePhoto("camera")}
+          />
         </View>
-      )}
+        <View style={styles.half}>
+          <Button
+            label={input.photos.length > 0 ? "Add from gallery" : "Choose photos"}
+            tone="secondary"
+            onPress={() => takePhoto("library")}
+          />
+        </View>
+      </View>
       {mode === "create" ? (
         <View style={styles.actions}>
           <Button

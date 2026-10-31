@@ -110,6 +110,8 @@ export function roleLabel(role: string) {
       return "Conservation officer";
     case "administrator":
       return "Administrator";
+    case "guide":
+      return "Park guide";
     case "visitor":
       return "Visitor";
     default:

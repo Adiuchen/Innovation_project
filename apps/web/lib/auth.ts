@@ -6,12 +6,12 @@ export type Profile = {
   id: string;
   name: string;
   email: string | null;
-  role: "botanist" | "conservation_officer" | "administrator" | "visitor";
+  role: "botanist" | "conservation_officer" | "administrator" | "guide" | "visitor";
   status: "active" | "suspended";
 };
 
 export function homeForRole(role: Profile["role"]) {
-  if (role === "botanist" || role === "conservation_officer" || role === "administrator") {
+  if (role === "botanist" || role === "conservation_officer" || role === "administrator" || role === "guide") {
     return "/dashboard";
   }
   return "/";

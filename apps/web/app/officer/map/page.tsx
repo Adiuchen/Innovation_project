@@ -1,4 +1,5 @@
 import { PageHeading } from "@/components/PageHeading";
+import { SpeciesMap, type MapPoint } from "@/components/SpeciesMap";
 import { requireUser } from "@/lib/auth";
 import { getCopy, statusText } from "@/lib/i18n";
 
@@ -11,11 +12,29 @@ export default async function MapPage() {
     .not("latitude", "is", null)
     .order("recorded_at", { ascending: false });
 
+  const points: MapPoint[] = (data ?? [])
+    .filter((record) => typeof record.latitude === "number" && typeof record.longitude === "number")
+    .map((record) => {
+      const species = Array.isArray(record.species) ? record.species[0] : record.species;
+      return {
+        latitude: record.latitude as number,
+        longitude: record.longitude as number,
+        title: `${record.id} · ${record.plant_name || species?.scientific_name || t.unidentified}`,
+        subtitle: `${record.location_name || t.noPlaceName} · ${statusText(record.status, t)}`,
+        href: `/officer/records/${record.uuid}`,
+      };
+    });
+
   return (
     <main className="mx-auto max-w-5xl px-4 pb-8">
       <PageHeading backHref="/dashboard" backLabel={t.backPage} title={t.map} />
       <p className="mt-1 text-sm text-neutral-600">{t.mapIntro}</p>
       {error && <p className="mt-3 text-sm text-red-700">{error.message}</p>}
+      {points.length > 0 && (
+        <div className="mt-4">
+          <SpeciesMap points={points} linkLabel={t.viewPlant} height={480} />
+        </div>
+      )}
       <ul className="mt-4 divide-y surface">
         {(data ?? []).map((record) => {
           const species = Array.isArray(record.species) ? record.species[0] : record.species;

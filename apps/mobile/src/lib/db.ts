@@ -1,5 +1,5 @@
 import * as SQLite from "expo-sqlite";
-import type { CachedRecord, Draft, PhotoRef, Species } from "@/types";
+import type { CachedRecord, Draft, LocalPhoto, PhotoRef, Species } from "@/types";
 
 type SpeciesRow = Omit<Species, "photos"> & { photos_json: string | null };
 type RecordRow = Omit<CachedRecord, "photos"> & { photos_json: string | null };
@@ -93,6 +93,7 @@ async function database() {
         "ALTER TABLE drafts ADD COLUMN life_stage TEXT",
         "ALTER TABLE records ADD COLUMN plant_name TEXT",
         "ALTER TABLE records ADD COLUMN life_stage TEXT",
+        "ALTER TABLE drafts ADD COLUMN photos_json TEXT",
       ]) {
         try {
           await db.execAsync(statement);
@@ -160,27 +161,58 @@ export async function getSpecies(uuid: string) {
   return row ? toSpecies(row) : null;
 }
 
-type DraftRow = Omit<Draft, "plant_name" | "life_stage"> & {
+type DraftRow = Omit<Draft, "plant_name" | "life_stage" | "photos"> & {
   plant_name: string | null;
   life_stage: string | null;
+  photos_json: string | null;
 };
 
+function parseLocalPhotos(value: string | null): LocalPhoto[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as LocalPhoto[];
+    return Array.isArray(parsed) ? parsed.filter((photo) => photo && typeof photo.uri === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function toDraft(row: DraftRow): Draft {
+  const { photos_json, ...rest } = row;
+  let photos = parseLocalPhotos(photos_json);
+  // Drafts saved before multiple photos were supported keep their single photo.
+  if (photos.length === 0 && rest.photo_uri) {
+    photos = [
+      {
+        id: rest.local_id,
+        uri: rest.photo_uri,
+        caption: rest.photo_caption ?? "",
+        remote_url: rest.photo_remote_url,
+      },
+    ];
+  }
   return {
-    ...row,
-    plant_name: row.plant_name ?? "",
-    life_stage: row.life_stage ?? "",
+    ...rest,
+    plant_name: rest.plant_name ?? "",
+    life_stage: rest.life_stage ?? "",
+    photos,
   };
 }
 
 export async function saveDraft(draft: Draft) {
   const db = await database();
+  const photos: LocalPhoto[] =
+    draft.photos ??
+    (draft.photo_uri
+      ? [{ id: draft.local_id, uri: draft.photo_uri, caption: draft.photo_caption ?? "", remote_url: draft.photo_remote_url }]
+      : []);
+  const first = photos[0];
   await db.runAsync(
     `INSERT INTO drafts (
       local_id, user_id, remote_uuid, species_id, species_label, plant_name, life_stage, height_m, trunk_diameter_cm,
       latitude, longitude, location_name, leaf_traits, flower_fruit_traits, health_status,
-      other_traits, photo_uri, photo_caption, photo_remote_url, status, saved_at, sync_error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      other_traits, photo_uri, photo_caption, photo_remote_url, status, saved_at, sync_error, photos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(local_id) DO UPDATE SET
       user_id = excluded.user_id,
       remote_uuid = excluded.remote_uuid,
@@ -202,7 +234,8 @@ export async function saveDraft(draft: Draft) {
       photo_remote_url = excluded.photo_remote_url,
       status = excluded.status,
       saved_at = excluded.saved_at,
-      sync_error = excluded.sync_error`,
+      sync_error = excluded.sync_error,
+      photos_json = excluded.photos_json`,
     draft.local_id,
     draft.user_id,
     draft.remote_uuid,
@@ -219,12 +252,13 @@ export async function saveDraft(draft: Draft) {
     draft.flower_fruit_traits,
     draft.health_status,
     draft.other_traits,
-    draft.photo_uri,
-    draft.photo_caption,
-    draft.photo_remote_url,
+    first?.uri ?? null,
+    first?.caption ?? "",
+    first?.remote_url ?? null,
     draft.status,
     draft.saved_at,
     draft.sync_error,
+    JSON.stringify(photos),
   );
 }
 

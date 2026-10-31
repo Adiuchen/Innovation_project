@@ -87,17 +87,17 @@ export default function RecordDetailScreen() {
             flower_fruit_traits: record.flower_fruit_traits ?? "",
             health_status: record.health_status ?? "",
             other_traits: record.other_traits ?? "",
-            photo_uri: record.photos[0]?.storage_path ?? null,
-            photo_caption: record.photos[0]?.caption ?? "",
+            photos: record.photos.map((photo, index) => ({
+              id: `saved-${index}`,
+              uri: photo.storage_path,
+              caption: photo.caption ?? "",
+              remote_url: photo.storage_path,
+            })),
             status: "submitted",
           }}
           onSubmit={async (input: FieldInput) => {
             if (!online) return "Connect to the network before updating a record that is already in the central database.";
-            const originalPhoto = record.photos[0]?.storage_path ?? null;
-            const error = await resubmitRecord(profile.uuid, record.uuid, {
-              ...input,
-              photo_uri: input.photo_uri === originalPhoto ? null : input.photo_uri,
-            });
+            const error = await resubmitRecord(profile.uuid, record.uuid, input);
             if (error) return error;
             await syncNow();
             await load();

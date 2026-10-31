@@ -24,12 +24,16 @@ function cards(t: Copy): Record<Profile["role"], { href: string; title: string; 
       { href: "/admin/events", title: t.events, text: t.adminEventsText },
       { href: "/admin/iot", title: t.iot, text: t.iotText },
     ],
+    guide: [
+      { href: "/guide", title: t.speciesGuide, text: t.speciesGuideText },
+      { href: "/", title: t.findSpecies, text: t.findPlantText },
+    ],
     visitor: [],
   };
 }
 
 export default async function DashboardPage() {
-  const { supabase, profile } = await requireUser(["botanist", "conservation_officer", "administrator"]);
+  const { supabase, profile } = await requireUser(["botanist", "conservation_officer", "administrator", "guide"]);
   const { t } = await getCopy();
   const items = cards(t)[profile.role];
   let pendingReviews = 0;

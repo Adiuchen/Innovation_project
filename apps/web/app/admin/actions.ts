@@ -11,8 +11,10 @@ function authEmail(loginId: string) {
   return `${loginId.toLowerCase()}@staff.plantrecords.com`;
 }
 
+const STAFF_ROLES = ["botanist", "conservation_officer", "guide"];
+
 function nextLoginId(emails: Array<string | null>, role: string) {
-  const prefix = role === "conservation_officer" ? "O" : "B";
+  const prefix = role === "conservation_officer" ? "O" : role === "guide" ? "G" : "B";
   let max = 0;
   for (const email of emails) {
     const match = String(email ?? "").toUpperCase().match(new RegExp(`^${prefix}(\\d+)$`));
@@ -33,8 +35,8 @@ export async function createAccount(formData: FormData) {
     redirect("/admin?error=" + encodeURIComponent(t.gmailRequired));
   }
 
-  if (role !== "botanist" && role !== "conservation_officer") {
-    redirect("/admin?error=" + encodeURIComponent("Choose Botanist or Officer."));
+  if (!STAFF_ROLES.includes(role)) {
+    redirect("/admin?error=" + encodeURIComponent("Choose Botanist, Officer, or Park guide."));
   }
 
   const { data: existing } = await supabase.from("profiles").select("id");
@@ -86,10 +88,10 @@ export async function updateAccount(formData: FormData) {
   }
 
   let role = target.role;
-  if (target.role === "botanist" || target.role === "conservation_officer") {
+  if (STAFF_ROLES.includes(target.role)) {
     const nextRole = String(formData.get("role"));
-    if (nextRole !== "botanist" && nextRole !== "conservation_officer") {
-      redirect("/admin?error=" + encodeURIComponent("Choose Botanist or Officer."));
+    if (!STAFF_ROLES.includes(nextRole)) {
+      redirect("/admin?error=" + encodeURIComponent("Choose Botanist, Officer, or Park guide."));
     }
     role = nextRole;
   }

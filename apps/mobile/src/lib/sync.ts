@@ -11,7 +11,7 @@ import { speciesPhoto, storageObjectPath } from "@/lib/photo-path";
 import { cachePhotoFiles, deleteLocalPhoto, photoTimestamps, uploadPlantPhoto } from "@/lib/photos";
 import { numberOrNull, textOrNull } from "@/lib/plant";
 import { supabase } from "@/lib/supabase";
-import type { CachedRecord, Draft, PhotoRef, Profile, PublicPlant, Species } from "@/types";
+import type { CachedRecord, Draft, LocalPhoto, PhotoRef, Profile, PublicPlant, Species } from "@/types";
 
 export type SyncResult = {
   uploaded: number;
@@ -93,38 +93,42 @@ function recordPayload(draft: Draft) {
   };
 }
 
-async function attachPhoto(draft: Draft, recordId: string) {
-  if (!draft.photo_uri && !draft.photo_remote_url) {
-    return { error: null as string | null, photo_remote_url: null as string | null };
-  }
+// Uploads every photo of a draft. Returns the photo list with `remote_url` filled in for each
+// one that reached storage, so a retry only sends the photos that are still missing.
+async function attachPhotos(draft: Draft, recordId: string) {
+  const photos: LocalPhoto[] = [...(draft.photos ?? [])];
 
-  let url = draft.photo_remote_url;
-  if (!url && draft.photo_uri) {
-    const uploaded = await uploadPlantPhoto(draft.user_id, draft.local_id, draft.photo_uri);
-    if (!uploaded.url) {
-      return { error: uploaded.error ?? "Could not upload the photograph.", photo_remote_url: null };
+  for (let index = 0; index < photos.length; index += 1) {
+    const photo = photos[index]!;
+    let url = photo.remote_url;
+    if (!url) {
+      const uploaded = await uploadPlantPhoto(draft.user_id, `${draft.local_id}-${photo.id}`, photo.uri);
+      if (!uploaded.url) {
+        return { error: uploaded.error ?? "Could not upload the photograph.", photos };
+      }
+      url = uploaded.url;
+      photos[index] = { ...photo, remote_url: url };
     }
-    url = uploaded.url;
-  }
-  if (!url) return { error: null, photo_remote_url: null };
 
-  const existing = await supabase
-    .from("plant_photos")
-    .select("id")
-    .eq("plant_record_id", recordId)
-    .eq("storage_path", url)
-    .maybeSingle();
-  if (existing.error) return { error: existing.error.message, photo_remote_url: url };
-  if (!existing.data) {
-    const inserted = await supabase.from("plant_photos").insert({
-      plant_record_id: recordId,
-      storage_path: url,
-      caption: textOrNull(draft.photo_caption),
-      uploaded_by: draft.user_id,
-    });
-    if (inserted.error) return { error: inserted.error.message, photo_remote_url: url };
+    const existing = await supabase
+      .from("plant_photos")
+      .select("id")
+      .eq("plant_record_id", recordId)
+      .eq("storage_path", url)
+      .maybeSingle();
+    if (existing.error) return { error: existing.error.message, photos };
+    if (!existing.data) {
+      const inserted = await supabase.from("plant_photos").insert({
+        plant_record_id: recordId,
+        storage_path: url,
+        caption: textOrNull(photo.caption),
+        uploaded_by: draft.user_id,
+      });
+      if (inserted.error) return { error: inserted.error.message, photos };
+    }
   }
-  return { error: null, photo_remote_url: url };
+
+  return { error: null as string | null, photos };
 }
 
 async function uploadDrafts(userId: string): Promise<SyncResult> {
@@ -159,18 +163,21 @@ async function uploadDrafts(userId: string): Promise<SyncResult> {
 
     if (!recordId) return { uploaded, error: "The central database did not return a record id." };
 
-    const attached = await attachPhoto(draft, recordId);
+    const attached = await attachPhotos(draft, recordId);
     if (attached.error) {
       await saveDraft({
         ...draft,
         remote_uuid: recordId,
-        photo_remote_url: attached.photo_remote_url,
+        photos: attached.photos,
         sync_error: attached.error,
       });
       return { uploaded, error: attached.error };
     }
 
-    await deleteLocalPhoto(draft.photo_uri);
+    // Only remove the app's own copies, never an original from the phone's gallery.
+    for (const photo of attached.photos) {
+      if (photo.uri.startsWith("file:") && photo.uri.includes("/photos/")) await deleteLocalPhoto(photo.uri);
+    }
     await deleteDraft(draft.local_id);
     uploaded += 1;
   }

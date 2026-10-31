@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackPage } from "@/components/BackPage";
 import { PlantView } from "@/components/PlantView";
@@ -24,6 +25,16 @@ export default async function PublicPlantPage({
     .from("public_plant_photos")
     .select("id, storage_path, caption")
     .eq("qr_code", code);
+
+  const { data: species } = plant.scientific_name
+    ? await supabase
+        .from("species")
+        .select("uuid")
+        .eq("scientific_name", plant.scientific_name)
+        .is("hidden_at", null)
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
 
   return (
     <main className="mx-auto max-w-5xl px-4 pt-4 pb-8">
@@ -54,6 +65,11 @@ export default async function PublicPlantPage({
           }}
         />
       </div>
+      {species?.uuid && (
+        <Link className="btn mt-4 inline-flex" href={`/species/${species.uuid}`}>
+          {t.seeDistributionMap}
+        </Link>
+      )}
     </main>
   );
 }

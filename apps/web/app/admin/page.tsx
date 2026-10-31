@@ -14,6 +14,7 @@ export default async function AdminPage({
   const roles = [
     { value: "botanist", label: t.botanist },
     { value: "conservation_officer", label: t.officer },
+    { value: "guide", label: t.guide },
   ];
   const { data: profiles, error: profileError } = await supabase
     .from("profiles")
@@ -68,7 +69,7 @@ export default async function AdminPage({
             <tbody>
               {(profiles ?? []).map((profile) => {
                 const formId = `account-${profile.uuid}`;
-                const staff = profile.role === "botanist" || profile.role === "conservation_officer";
+                const staff = roles.some((role) => role.value === profile.role);
                 return (
                   <tr key={profile.uuid} className="border-b last:border-0">
                     <td className="p-3 font-medium">{profile.id}</td>
