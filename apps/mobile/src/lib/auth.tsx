@@ -21,6 +21,8 @@ type AuthValue = {
   signIn: (loginId: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   syncNow: () => Promise<void>;
+  /** Re-count drafts waiting to upload, e.g. after saving one offline. */
+  refreshCount: () => Promise<void>;
   clearNotice: () => void;
   version: number;
 };
@@ -260,6 +262,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncField(profile, false);
   }, [profile, syncField]);
 
+  const refreshCount = useCallback(async () => {
+    if (!profile) return;
+    await refreshPending(profile.uuid);
+  }, [profile, refreshPending]);
+
   const value = useMemo<AuthValue>(
     () => ({
       ready,
@@ -272,10 +279,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       syncNow,
+      refreshCount,
       clearNotice: () => setNotice(null),
       version,
     }),
-    [bootMessage, notice, online, pending, profile, ready, signIn, signOut, syncNow, syncing, version],
+    [bootMessage, notice, online, pending, profile, ready, refreshCount, signIn, signOut, syncNow, syncing, version],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   FlatList,
   Linking,
@@ -17,7 +17,18 @@ import { Button, Field, Notice } from "@/components/ui";
 import { listSpecies } from "@/lib/db";
 import { newId } from "@/lib/id";
 import { copyPhotoIntoApp } from "@/lib/photos";
-import { fieldProblems, flowerChoices, healthChoices, leafChoices, lifeStageChoices, speciesTitle, type ChoiceOption } from "@/lib/plant";
+import {
+  choiceLabel,
+  fieldProblems,
+  flowerChoices,
+  healthChoices,
+  invalidNumber,
+  leafChoices,
+  lifeStageChoices,
+  speciesTitle,
+  textOrNull,
+  type ChoiceOption,
+} from "@/lib/plant";
 import { colors } from "@/theme";
 import type { FieldInput, LocalPhoto, Species } from "@/types";
 
@@ -41,6 +52,22 @@ const emptyInput: FieldInput = {
   status: "submitted",
 };
 
+const STEPS = ["Plant", "Location", "Traits", "Photos", "Review"] as const;
+
+// The first problem on one step, so the botanist can fix it before moving on.
+function stepProblem(step: number, input: FieldInput): string | null {
+  if (step === 0) {
+    if (!textOrNull(input.plant_name)) return "Enter a plant name.";
+    if (invalidNumber(input.height_m)) return "Height must be a number.";
+    if (invalidNumber(input.trunk_diameter_cm)) return "Trunk diameter must be a number.";
+  }
+  if (step === 1) {
+    if (invalidNumber(input.latitude)) return "Latitude must be a number.";
+    if (invalidNumber(input.longitude)) return "Longitude must be a number.";
+  }
+  return null;
+}
+
 // Older callers pass a single photo_uri; turn it into the photo list.
 function initialPhotos(initial?: Partial<FieldInput>): LocalPhoto[] {
   if (initial?.photos) return initial.photos;
@@ -55,12 +82,15 @@ export function RecordForm({
   initial,
   mode,
   submitLabel,
+  saveLabel,
   onSubmit,
 }: {
   localId: string;
   initial?: Partial<FieldInput>;
   mode: "create" | "revise";
   submitLabel: string;
+  /** Revise mode only: label for a button that saves edits without submitting. */
+  saveLabel?: string;
   onSubmit: (input: FieldInput) => Promise<string | null>;
 }) {
   const [input, setInput] = useState<FieldInput>({
@@ -78,6 +108,7 @@ export function RecordForm({
   const [locating, setLocating] = useState(false);
   const [locationNote, setLocationNote] = useState<string | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     listSpecies().then(setSpecies).catch(() => setSpecies([]));
@@ -209,7 +240,7 @@ export function RecordForm({
       setMessage(problems[0] ?? "Check the measurements.");
       return;
     }
-    setSaving(mode === "create" ? status : "revise");
+    setSaving(status === "draft" ? "draft" : mode === "create" ? status : "revise");
     setMessage(null);
     const error = await onSubmit(next);
     setSaving(null);
@@ -222,103 +253,223 @@ export function RecordForm({
     return blob.includes(query.trim().toLowerCase());
   });
 
+  const last = STEPS.length - 1;
+
+  function goTo(next: number) {
+    setMessage(null);
+    setStep(Math.max(0, Math.min(last, next)));
+  }
+
+  function goNext() {
+    const problem = stepProblem(step, input);
+    if (problem) {
+      setMessage(problem);
+      return;
+    }
+    goTo(step + 1);
+  }
+
+  async function finish(status?: FieldInput["status"]) {
+    // Send the botanist back to the step that needs fixing.
+    for (let index = 0; index < last; index += 1) {
+      const problem = stepProblem(index, input);
+      if (problem) {
+        setStep(index);
+        setMessage(problem);
+        return;
+      }
+    }
+    await submit(status);
+  }
+
   return (
     <View style={styles.form}>
+      <View style={styles.progress} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: STEPS.length, now: step + 1 }}>
+        <Text style={styles.progressText}>
+          Step {step + 1} of {STEPS.length} · {STEPS[step]}
+        </Text>
+        <View style={styles.segments}>
+          {STEPS.map((name, index) => (
+            <Pressable
+              key={name}
+              accessibilityRole="button"
+              accessibilityLabel={`Go to ${name}`}
+              onPress={() => goTo(index)}
+              hitSlop={10}
+              style={[styles.segment, index <= step && styles.segmentOn]}
+            />
+          ))}
+        </View>
+      </View>
+
       {message && <Notice tone="warn">{message}</Notice>}
-      <Field label="Plant name" value={input.plant_name} onChangeText={(plant_name) => patch({ plant_name })} placeholder="Name used in the field" />
-      <Pressable accessibilityRole="button" style={styles.picker} onPress={() => setPickerOpen(true)}>
-        <Text style={styles.pickerLabel}>Species</Text>
-        <Text style={styles.pickerValue}>{input.species_label || "Not identified yet"}</Text>
-      </Pressable>
-      <ChoiceField label="Life stage" value={input.life_stage} options={lifeStageChoices} onChange={(life_stage) => patch({ life_stage })} />
-      <View style={styles.row}>
-        <View style={styles.half}>
-          <Field label="Height (m)" value={input.height_m} onChangeText={(height_m) => patch({ height_m })} keyboardType="decimal-pad" />
-        </View>
-        <View style={styles.half}>
-          <Field label="Trunk diameter (cm)" value={input.trunk_diameter_cm} onChangeText={(trunk_diameter_cm) => patch({ trunk_diameter_cm })} keyboardType="decimal-pad" />
-        </View>
-      </View>
-      <View style={styles.row}>
-        <View style={styles.half}>
-          <Field label="Latitude" value={input.latitude} editable={false} placeholder="—" />
-        </View>
-        <View style={styles.half}>
-          <Field label="Longitude" value={input.longitude} editable={false} placeholder="—" />
-        </View>
-      </View>
-      <Button label={locating ? "Finding location…" : "Use my location"} tone="secondary" disabled={locating} onPress={useLocation} />
-      {locationNote ? <Notice tone="warn">{locationNote}</Notice> : null}
-      {locationNote?.includes("Settings") ? (
-        <Button label="Open Settings" tone="secondary" onPress={() => Linking.openSettings()} />
-      ) : null}
-      {accuracy != null && <Text style={styles.accuracy}>GPS accuracy about {Math.round(accuracy)} m</Text>}
-      <Field label="Place name" value={input.location_name} onChangeText={(location_name) => patch({ location_name })} placeholder="Trail, cave mouth, plot" />
-      <ChoiceField label="Leaf traits" value={input.leaf_traits} options={leafChoices} onChange={(leaf_traits) => patch({ leaf_traits })} />
-      <ChoiceField label="Flower or fruit" value={input.flower_fruit_traits} options={flowerChoices} onChange={(flower_fruit_traits) => patch({ flower_fruit_traits })} />
-      <ChoiceField label="Health" value={input.health_status} options={healthChoices} onChange={(health_status) => patch({ health_status })} />
-      <Field label="Other traits" value={input.other_traits} onChangeText={(other_traits) => patch({ other_traits })} multiline />
-      <Text style={styles.pickerLabel}>
-        Photographs{input.photos.length > 0 ? ` (${input.photos.length})` : ""}
-      </Text>
-      {input.photos.map((photo, index) => {
-        // In revise mode, photos already in the central database cannot be removed or re-captioned here.
-        const saved = mode === "revise" && photo.remote_url != null;
-        return (
-          <View key={photo.id} style={styles.photoBlock}>
-            <PlantPhoto photo={{ storage_path: photo.uri, caption: null }} showCaption={false} height={200} radius={20} />
-            {saved ? (
-              <Text style={styles.accuracy}>
-                Photo {index + 1} · already uploaded{photo.caption ? ` · ${photo.caption}` : ""}
-              </Text>
-            ) : (
-              <>
-                <Field
-                  label={`Photo ${index + 1} caption`}
-                  value={photo.caption}
-                  onChangeText={(caption) => updatePhoto(photo.id, { caption })}
-                  placeholder="Leaf, flower, bark, whole plant…"
-                />
-                <Pressable accessibilityRole="button" onPress={() => removePhoto(photo.id)} hitSlop={8}>
-                  <Text style={styles.remove}>Remove photo {index + 1}</Text>
-                </Pressable>
-              </>
-            )}
+
+      {step === 0 && (
+        <>
+          <Field label="Plant name *" value={input.plant_name} onChangeText={(plant_name) => patch({ plant_name })} placeholder="Name used in the field" />
+          <Pressable accessibilityRole="button" style={styles.picker} onPress={() => setPickerOpen(true)}>
+            <Text style={styles.pickerLabel}>Species</Text>
+            <Text style={styles.pickerValue}>{input.species_label || "Not identified yet"}</Text>
+          </Pressable>
+          <ChoiceField label="Life stage" value={input.life_stage} options={lifeStageChoices} onChange={(life_stage) => patch({ life_stage })} />
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Field label="Height (m)" value={input.height_m} onChangeText={(height_m) => patch({ height_m })} keyboardType="decimal-pad" />
+            </View>
+            <View style={styles.half}>
+              <Field label="Trunk diameter (cm)" value={input.trunk_diameter_cm} onChangeText={(trunk_diameter_cm) => patch({ trunk_diameter_cm })} keyboardType="decimal-pad" />
+            </View>
           </View>
-        );
-      })}
-      <View style={styles.row}>
-        <View style={styles.half}>
-          <Button
-            label={input.photos.length > 0 ? "Take another" : "Take photo"}
-            tone="secondary"
-            onPress={() => takePhoto("camera")}
-          />
+        </>
+      )}
+
+      {step === 1 && (
+        <>
+          <Button label={locating ? "Finding location…" : "Use my location"} disabled={locating} onPress={useLocation} />
+          {locationNote ? <Notice tone="warn">{locationNote}</Notice> : null}
+          {locationNote?.includes("Settings") ? (
+            <Button label="Open Settings" tone="secondary" onPress={() => Linking.openSettings()} />
+          ) : null}
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Field label="Latitude" value={input.latitude} editable={false} placeholder="—" />
+            </View>
+            <View style={styles.half}>
+              <Field label="Longitude" value={input.longitude} editable={false} placeholder="—" />
+            </View>
+          </View>
+          {accuracy != null && <Text style={styles.accuracy}>GPS accuracy about {Math.round(accuracy)} m</Text>}
+          <Field label="Place name" value={input.location_name} onChangeText={(location_name) => patch({ location_name })} placeholder="Trail, cave mouth, plot" />
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <ChoiceField label="Leaf traits" value={input.leaf_traits} options={leafChoices} onChange={(leaf_traits) => patch({ leaf_traits })} />
+          <ChoiceField label="Flower or fruit" value={input.flower_fruit_traits} options={flowerChoices} onChange={(flower_fruit_traits) => patch({ flower_fruit_traits })} />
+          <ChoiceField label="Health" value={input.health_status} options={healthChoices} onChange={(health_status) => patch({ health_status })} />
+          <Field label="Other traits" value={input.other_traits} onChangeText={(other_traits) => patch({ other_traits })} multiline />
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+          <Text style={styles.pickerLabel}>
+            Photographs{input.photos.length > 0 ? ` (${input.photos.length})` : ""}
+          </Text>
+          {input.photos.map((photo, index) => {
+            // In revise mode, photos already in the central database cannot be removed or re-captioned here.
+            const saved = mode === "revise" && photo.remote_url != null;
+            return (
+              <View key={photo.id} style={styles.photoBlock}>
+                <PlantPhoto photo={{ storage_path: photo.uri, caption: null }} showCaption={false} height={200} radius={20} />
+                {saved ? (
+                  <Text style={styles.accuracy}>
+                    Photo {index + 1} · already uploaded{photo.caption ? ` · ${photo.caption}` : ""}
+                  </Text>
+                ) : (
+                  <>
+                    <Field
+                      label={`Photo ${index + 1} caption`}
+                      value={photo.caption}
+                      onChangeText={(caption) => updatePhoto(photo.id, { caption })}
+                      placeholder="Leaf, flower, bark, whole plant…"
+                    />
+                    <Pressable accessibilityRole="button" onPress={() => removePhoto(photo.id)} hitSlop={8}>
+                      <Text style={styles.remove}>Remove photo {index + 1}</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            );
+          })}
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Button
+                label={input.photos.length > 0 ? "Take another" : "Take photo"}
+                tone="secondary"
+                onPress={() => takePhoto("camera")}
+              />
+            </View>
+            <View style={styles.half}>
+              <Button
+                label={input.photos.length > 0 ? "Add from gallery" : "Choose photos"}
+                tone="secondary"
+                onPress={() => takePhoto("library")}
+              />
+            </View>
+          </View>
+        </>
+      )}
+
+      {step === 4 && (
+        <View style={styles.review}>
+          <ReviewSection title="Plant" onEdit={() => goTo(0)}>
+            <ReviewRow label="Plant name" value={input.plant_name} />
+            <ReviewRow label="Species" value={input.species_label || "Not identified yet"} />
+            <ReviewRow label="Life stage" value={choiceLabel(input.life_stage, lifeStageChoices)} />
+            <ReviewRow label="Height" value={input.height_m ? `${input.height_m} m` : null} />
+            <ReviewRow label="Trunk diameter" value={input.trunk_diameter_cm ? `${input.trunk_diameter_cm} cm` : null} />
+          </ReviewSection>
+          <ReviewSection title="Location" onEdit={() => goTo(1)}>
+            <ReviewRow label="GPS" value={input.latitude && input.longitude ? `${input.latitude}, ${input.longitude}` : "Not recorded"} />
+            <ReviewRow label="Place" value={input.location_name} />
+          </ReviewSection>
+          <ReviewSection title="Traits" onEdit={() => goTo(2)}>
+            <ReviewRow label="Leaves" value={choiceLabel(input.leaf_traits, leafChoices)} />
+            <ReviewRow label="Flower or fruit" value={choiceLabel(input.flower_fruit_traits, flowerChoices)} />
+            <ReviewRow label="Health" value={choiceLabel(input.health_status, healthChoices)} />
+            <ReviewRow label="Other" value={input.other_traits} />
+          </ReviewSection>
+          <ReviewSection title="Photos" onEdit={() => goTo(3)}>
+            <ReviewRow label="Attached" value={input.photos.length === 0 ? "None" : `${input.photos.length} photo${input.photos.length === 1 ? "" : "s"}`} />
+          </ReviewSection>
         </View>
-        <View style={styles.half}>
-          <Button
-            label={input.photos.length > 0 ? "Add from gallery" : "Choose photos"}
-            tone="secondary"
-            onPress={() => takePhoto("library")}
-          />
+      )}
+
+      {step < last ? (
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Button label="Back" tone="secondary" disabled={step === 0} onPress={() => goTo(step - 1)} />
+          </View>
+          <View style={styles.half}>
+            <Button label={step === last - 1 ? "Review" : "Next"} onPress={goNext} />
+          </View>
         </View>
-      </View>
-      {mode === "create" ? (
+      ) : mode === "create" ? (
         <View style={styles.actions}>
+          <Button
+            label={saving === "submitted" ? "Saving…" : "Submit for review"}
+            disabled={saving != null}
+            onPress={() => finish("submitted")}
+          />
           <Button
             label={saving === "draft" ? "Saving…" : "Save as draft"}
             tone="secondary"
             disabled={saving != null}
-            onPress={() => submit("draft")}
+            onPress={() => finish("draft")}
           />
-          <Button
-            label={saving === "submitted" ? "Saving…" : "Submit for review"}
-            disabled={saving != null}
-            onPress={() => submit("submitted")}
-          />
+          <Button label="Back" tone="secondary" disabled={saving != null} onPress={() => goTo(step - 1)} />
         </View>
       ) : (
-        <Button label={saving ? "Saving…" : submitLabel} disabled={saving != null} onPress={() => submit()} />
+        <View style={styles.actions}>
+          <Button
+            label={saving != null && saving !== "draft" ? "Saving…" : submitLabel}
+            disabled={saving != null}
+            // With a separate Save button this one always submits. Without one (older screens),
+            // keep the previous behaviour and save with the status the screen passed in.
+            onPress={() => (saveLabel ? finish("submitted") : finish())}
+          />
+          {saveLabel ? (
+            <Button
+              label={saving === "draft" ? "Saving…" : saveLabel}
+              tone="secondary"
+              disabled={saving != null}
+              onPress={() => finish("draft")}
+            />
+          ) : null}
+          <Button label="Back" tone="secondary" disabled={saving != null} onPress={() => goTo(step - 1)} />
+        </View>
       )}
 
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
@@ -367,6 +518,29 @@ export function RecordForm({
           <Button label="Close" tone="secondary" onPress={() => setPickerOpen(false)} />
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function ReviewSection({ title, onEdit, children }: { title: string; onEdit: () => void; children: ReactNode }) {
+  return (
+    <View style={styles.reviewCard}>
+      <View style={styles.reviewHead}>
+        <Text style={styles.reviewTitle}>{title}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${title}`} onPress={onEdit} hitSlop={12}>
+          <Text style={styles.reviewEdit}>Edit</Text>
+        </Pressable>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function ReviewRow({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <View style={styles.reviewRow}>
+      <Text style={styles.reviewLabel}>{label}</Text>
+      <Text style={styles.reviewValue}>{value?.trim() ? value : "—"}</Text>
     </View>
   );
 }
@@ -436,6 +610,19 @@ function ChoiceField({
 
 const styles = StyleSheet.create({
   form: { gap: 12 },
+  progress: { gap: 8, marginBottom: 4 },
+  progressText: { color: colors.forest, fontSize: 15, fontWeight: "700" },
+  segments: { flexDirection: "row", gap: 6 },
+  segment: { flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.line },
+  segmentOn: { backgroundColor: colors.forest },
+  review: { gap: 10 },
+  reviewCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 14, gap: 8 },
+  reviewHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  reviewTitle: { color: colors.ink, fontSize: 16, fontWeight: "700" },
+  reviewEdit: { color: colors.forest, fontSize: 15, fontWeight: "700" },
+  reviewRow: { flexDirection: "row", gap: 12 },
+  reviewLabel: { color: colors.muted, fontSize: 14, width: 110 },
+  reviewValue: { color: colors.ink, fontSize: 14, flex: 1 },
   row: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },
   picker: {

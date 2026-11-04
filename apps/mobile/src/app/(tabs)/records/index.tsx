@@ -1,8 +1,9 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { Badge, Muted, Notice } from "@/components/ui";
-import { listDrafts, listRecords } from "@/lib/db";
+import { deleteDraft, listDrafts, listRecords } from "@/lib/db";
+import { deleteLocalPhoto } from "@/lib/photos";
 import { useAuth } from "@/lib/auth";
 import { usePreferences } from "@/lib/preferences";
 import { formatWhen, recordName } from "@/lib/plant";
@@ -23,7 +24,7 @@ function recordText(item: CachedRecord) {
 }
 
 export default function RecordsScreen() {
-  const { profile, syncNow, version, pending } = useAuth();
+  const { profile, syncNow, version, pending, refreshCount } = useAuth();
   const { palette, t } = usePreferences();
   const [records, setRecords] = useState<CachedRecord[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -113,10 +114,42 @@ export default function RecordsScreen() {
             <View style={styles.block}>
               <Text style={styles.heading}>{t.stillOnPhone}</Text>
               {drafts.map((draft) => (
-                <Pressable key={draft.local_id} style={styles.row} onPress={() => router.push(`/records/draft/${draft.local_id}`)}>
-                  <Text style={styles.name}>{recordName(draft.plant_name, draft.species_label)}</Text>
-                  <Muted>{draft.sync_error || draft.location_name || t.notUploaded}</Muted>
-                </Pressable>
+                <View key={draft.local_id} style={[styles.row, styles.draftRow]}>
+                  <Pressable style={styles.draftMain} onPress={() => router.push(`/records/draft/${draft.local_id}`)}>
+                    <Text style={styles.name}>{recordName(draft.plant_name, draft.species_label)}</Text>
+                    <Muted>{draft.sync_error || draft.location_name || t.notUploaded}</Muted>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete draft ${recordName(draft.plant_name, draft.species_label)}`}
+                    hitSlop={8}
+                    style={styles.deleteButton}
+                    onPress={() =>
+                      Alert.alert(
+                        "Delete this draft?",
+                        "It has not been uploaded, so it and its photos will be gone for good.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: async () => {
+                              // Only the app's own photo copies are removed, never gallery originals.
+                              for (const photo of draft.photos ?? []) {
+                                if (photo.uri.startsWith("file:") && photo.uri.includes("/photos/")) await deleteLocalPhoto(photo.uri);
+                              }
+                              await deleteDraft(draft.local_id);
+                              setDrafts((current) => current.filter((item) => item.local_id !== draft.local_id));
+                              await refreshCount();
+                            },
+                          },
+                        ],
+                      )
+                    }
+                  >
+                    <Text style={styles.deleteText}>Delete</Text>
+                  </Pressable>
+                </View>
               ))}
             </View>
           )}
@@ -173,6 +206,10 @@ const styles = StyleSheet.create({
   count: { color: colors.muted, fontSize: 13 },
   block: { gap: 8 },
   heading: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  draftRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  draftMain: { flex: 1, gap: 4 },
+  deleteButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.dangerBg },
+  deleteText: { color: colors.danger, fontWeight: "700" },
   row: {
     backgroundColor: colors.card,
     borderRadius: 14,

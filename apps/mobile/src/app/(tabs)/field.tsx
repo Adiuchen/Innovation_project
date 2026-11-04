@@ -46,7 +46,7 @@ export default function FieldHome() {
   const statusLine = !online ? t.offline : notice || t.connected;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
+    <SafeAreaView style={styles.screen} edges={[]}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={

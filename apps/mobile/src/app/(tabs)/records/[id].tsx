@@ -1,6 +1,6 @@
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, StyleSheet, Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { PrintQrButton } from "@/components/PrintQrButton";
@@ -9,7 +9,7 @@ import { RecordForm } from "@/components/RecordForm";
 import { getRecord } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { choiceLabel, firstParam, flowerChoices, formatWhen, healthChoices, leafChoices, lifeStageChoices, plantQrValue, recordName } from "@/lib/plant";
-import { generateRecordQr, resubmitRecord } from "@/lib/remote";
+import { deleteRemoteDraft, generateRecordQr, resubmitRecord } from "@/lib/remote";
 import { refreshReferenceData } from "@/lib/sync";
 import { siteUrl } from "@/lib/supabase";
 import { colors } from "@/theme";
@@ -23,6 +23,9 @@ export default function RecordDetailScreen() {
   const [missing, setMissing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  // Remount the form after a save so newly uploaded photos are shown as already uploaded.
+  const [formKey, setFormKey] = useState(0);
 
   const load = useCallback(async () => {
     let row = await getRecord(recordId);
@@ -50,7 +53,8 @@ export default function RecordDetailScreen() {
   }
   if (!record) return null;
 
-  const editable = record.status === "draft" || record.status === "needs_revision";
+  // Drafts, records sent back for changes, and rejected records can be edited (same as the website).
+  const editable = record.status === "draft" || record.status === "needs_revision" || record.status === "rejected";
   const qrValue = record.qr_code ? plantQrValue(record.qr_code, siteUrl) : null;
 
   return (
@@ -67,12 +71,15 @@ export default function RecordDetailScreen() {
       ) : null}
       {record.review_note && <Notice tone="warn">Officer note: {record.review_note}</Notice>}
       {message && <Notice tone="danger">{message}</Notice>}
+      {saved && !message && <Notice tone="ok">{saved}</Notice>}
 
       {editable && profile.role === "botanist" ? (
         <RecordForm
+          key={formKey}
           localId={record.uuid}
           mode="revise"
-          submitLabel="Submit again"
+          submitLabel={record.status === "draft" ? "Submit for review" : "Submit again"}
+          saveLabel={record.status === "draft" ? "Save draft" : "Save changes"}
           initial={{
             species_id: record.species_id,
             species_label: record.species_name ?? "",
@@ -97,16 +104,52 @@ export default function RecordDetailScreen() {
           }}
           onSubmit={async (input: FieldInput) => {
             if (!online) return "Connect to the network before updating a record that is already in the central database.";
-            const error = await resubmitRecord(profile.uuid, record.uuid, input);
+            // "draft" here means Save: keep the current status. Otherwise send for review.
+            const keepStatus = input.status === "draft";
+            const error = await resubmitRecord(profile.uuid, record.uuid, input, { keepStatus });
             if (error) return error;
             await syncNow();
             await load();
             setMessage(null);
+            setSaved(keepStatus ? "Changes saved. Submit when you are ready." : "Sent for review.");
+            setFormKey((value) => value + 1);
             return null;
           }}
         />
       ) : (
         <SubmittedRecord record={record} />
+      )}
+
+      {record.status === "draft" && profile.role === "botanist" && (
+        <Button
+          label={working ? "Deleting…" : "Delete draft"}
+          tone="danger"
+          disabled={working}
+          onPress={() => {
+            if (!online) {
+              setMessage("Connect to the network before deleting a draft that is already uploaded.");
+              return;
+            }
+            Alert.alert("Delete this draft?", "The draft and its photos are removed for good. This cannot be undone.", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: async () => {
+                  setWorking(true);
+                  const error = await deleteRemoteDraft(profile.uuid, record.uuid);
+                  setWorking(false);
+                  if (error) {
+                    setMessage(error);
+                    return;
+                  }
+                  await syncNow();
+                  router.replace("/records");
+                },
+              },
+            ]);
+          }}
+        />
       )}
 
       {record.status === "approved" && !record.qr_code && profile.role === "botanist" && (

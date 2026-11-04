@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import type { FieldInput } from "@/types";
 
 export default function NewRecordScreen() {
-  const { profile, online, syncNow } = useAuth();
+  const { profile, online, syncNow, refreshCount } = useAuth();
   const [localId] = useState(newId);
 
   if (!profile) return null;
@@ -46,6 +46,7 @@ export default function NewRecordScreen() {
             return error instanceof Error ? error.message : "Could not save this record on the phone.";
           }
           if (online) await syncNow();
+          else await refreshCount();
           router.replace("/records");
           return null;
         }}

@@ -1,5 +1,7 @@
 import { Tabs } from "expo-router";
-import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, ScanTabIcon } from "@/components/TabIcon";
+import { SyncBar } from "@/components/SyncBar";
+import { ScanTabButtonIcon } from "@/components/ScanTabButton";
+import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, SpeciesTabIcon } from "@/components/TabIcon";
 import { usePreferences } from "@/lib/preferences";
 
 export const unstable_settings = {
@@ -18,7 +20,9 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        // The sync bar sits where a header would, so it handles the top safe area for every tab.
+        headerShown: true,
+        header: () => <SyncBar />,
         tabBarActiveTintColor: palette.forest,
         tabBarInactiveTintColor: palette.muted,
         tabBarStyle: {
@@ -38,14 +42,25 @@ export default function TabLayout() {
         options={{ title: t.recordsTab, tabBarIcon: ({ color, size }) => <RecordsTabIcon color={color} size={size} /> }}
       />
       <Tabs.Screen
+        name="scan"
+        // Scan sits in the centre as a raised button. The camera stays full screen, so this tab
+        // keeps its own safe area and no sync bar.
+        options={{
+          title: t.scanTab,
+          headerShown: false,
+          tabBarAccessibilityLabel: t.scanTab,
+          tabBarLabel: () => null,
+          tabBarIcon: ({ focused }) => <ScanTabButtonIcon focused={focused} palette={palette} />,
+        }}
+      />
+      <Tabs.Screen
         name="plants"
         options={{ title: t.plantsTab, tabBarIcon: ({ color, size }) => <PlantsTabIcon color={color} size={size} /> }}
       />
       <Tabs.Screen
-        name="scan"
-        options={{ title: t.scanTab, tabBarIcon: ({ color, size }) => <ScanTabIcon color={color} size={size} /> }}
+        name="species"
+        options={{ title: t.species, tabBarIcon: ({ color, size }) => <SpeciesTabIcon color={color} size={size} /> }}
       />
-      <Tabs.Screen name="species" options={offTabBar} />
       <Tabs.Screen name="events" options={offTabBar} />
     </Tabs>
   );

@@ -56,3 +56,12 @@ export function ScanTabIcon({ color, size }: IconProps) {
     </Icon>
   );
 }
+
+export function SpeciesTabIcon({ color, size }: IconProps) {
+  return (
+    <Icon color={color} size={size}>
+      <Path d="M5 4.5h5.5A2.5 2.5 0 0 1 13 7v13a2 2 0 0 0-2-2H5Z" stroke={ink(color)} {...stroke} />
+      <Path d="M19 4.5h-5.5A2.5 2.5 0 0 0 11 7v13a2 2 0 0 1 2-2h6Z" stroke={ink(color)} {...stroke} />
+    </Icon>
+  );
+}
