@@ -4,5 +4,8 @@
   "scripts": {
     "dev:web": "npm run dev --prefix apps/web",
     "dev:mobile": "npm start --prefix apps/mobile"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7"
   }
 }

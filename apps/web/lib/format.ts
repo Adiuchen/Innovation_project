@@ -55,6 +55,15 @@ export function parkStartParts(value: string, locale: "en" | "ms") {
   };
 }
 
+export function formatParkTimeDate(value: string, locale: "en" | "ms") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const tag = locale === "ms" ? "ms-MY" : "en-MY";
+  const time = new Intl.DateTimeFormat(tag, { timeZone: PARK_ZONE, timeStyle: "short" }).format(date);
+  const day = new Intl.DateTimeFormat(tag, { timeZone: PARK_ZONE, dateStyle: "medium" }).format(date);
+  return `${time}, ${day}`;
+}
+
 export function formatParkWhen(startsAt: string, endsAt: string | null, locale: "en" | "ms") {
   const tag = locale === "ms" ? "ms-MY" : "en-MY";
   const start = new Date(startsAt);

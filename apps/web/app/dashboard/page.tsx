@@ -16,7 +16,7 @@ function cards(t: Copy): Record<Profile["role"], { href: string; title: string; 
       { href: "/officer/plants", title: t.viewPlants, text: t.viewPlantsText },
       { href: "/officer/species", title: t.species, text: t.speciesText },
       { href: "/officer/map", title: t.map, text: t.mapText },
-      { href: "/officer/iot", title: t.iot, text: t.iotText },
+      { href: "/officer/iot", title: t.iot, text: t.officerIotText },
       { href: "/officer/events", title: t.events, text: t.eventsText },
     ],
     administrator: [
