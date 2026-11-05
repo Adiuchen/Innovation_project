@@ -10,6 +10,7 @@ import {
 import { speciesPhoto, storageObjectPath } from "@/lib/photo-path";
 import { cachePhotoFiles, deleteLocalPhoto, photoTimestamps, uploadPlantPhoto } from "@/lib/photos";
 import { numberOrNull, textOrNull } from "@/lib/plant";
+import { cachedPublicDetail, forgetPublicPlant, rememberFetchedPlant } from "@/lib/publicPlants";
 import { supabase } from "@/lib/supabase";
 import type { CachedRecord, Draft, LocalPhoto, PhotoRef, Profile, PublicPlant, Species } from "@/types";
 
@@ -325,33 +326,43 @@ function textField(row: Record<string, unknown>, key: string) {
 
 export async function lookupTag(code: string, online: boolean): Promise<TagHit> {
   if (online) {
-    const page = await supabase.from("public_plant_pages").select("*").eq("qr_code", code).maybeSingle();
-    if (!page.error && page.data) {
-      const row = page.data as Record<string, unknown>;
-      const photos = await supabase
-        .from("public_plant_photos")
-        .select("storage_path, caption")
-        .eq("qr_code", code);
-      return {
-        kind: "public",
-        plant: {
-          qr_code: textField(row, "qr_code") ?? code,
-          scientific_name: textField(row, "scientific_name"),
-          common_name: textField(row, "common_name"),
-          local_name: textField(row, "local_name"),
-          family: textField(row, "family"),
-          genus: textField(row, "genus"),
-          conservation_status: textField(row, "conservation_status"),
-          distribution: textField(row, "distribution"),
-          description: textField(row, "description"),
-          ecological_info: textField(row, "ecological_info"),
-          cultural_significance: textField(row, "cultural_significance"),
-          health_status: textField(row, "health_status"),
-        },
-        photos: photos.error ? [] : await cachePhotoFiles((photos.data ?? []) as PhotoRef[]),
-      };
+    try {
+      const page = await supabase.from("public_plant_pages").select("*").eq("qr_code", code).maybeSingle();
+      if (!page.error && page.data) {
+        const row = page.data as Record<string, unknown>;
+        const photos = await supabase
+          .from("public_plant_photos")
+          .select("storage_path, caption")
+          .eq("qr_code", code);
+        const visible = photos.error ? [] : await cachePhotoFiles((photos.data ?? []) as PhotoRef[]);
+        const saved = await rememberFetchedPlant(row, visible).catch(() => null);
+        return {
+          kind: "public",
+          plant: saved ?? {
+            qr_code: textField(row, "qr_code") ?? code,
+            scientific_name: textField(row, "scientific_name"),
+            common_name: textField(row, "common_name"),
+            local_name: textField(row, "local_name"),
+            family: textField(row, "family"),
+            genus: textField(row, "genus"),
+            conservation_status: textField(row, "conservation_status"),
+            distribution: textField(row, "distribution"),
+            description: textField(row, "description"),
+            ecological_info: textField(row, "ecological_info"),
+            cultural_significance: textField(row, "cultural_significance"),
+            health_status: textField(row, "health_status"),
+          },
+          photos: visible,
+        };
+      }
+      if (!page.error) await forgetPublicPlant(code).catch(() => undefined);
+    } catch {
+      // The phone reported a connection, but the request failed. Use the saved copy.
     }
   }
+
+  const cached = await cachedPublicDetail(code).catch(() => null);
+  if (cached) return { kind: "public", plant: cached, photos: cached.photos };
 
   const local = await getRecordByQr(code);
   if (local) return { kind: "record", record: local };

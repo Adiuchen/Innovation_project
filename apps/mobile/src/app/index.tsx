@@ -9,11 +9,19 @@ import { useAuth } from "@/lib/auth";
 import { listUpcomingEvents, type PublicEvent } from "@/lib/events";
 import { usePreferences } from "@/lib/preferences";
 import { displayUri } from "@/lib/photos";
-import { plantSubtitle, plantTitle, searchPublicPlants, type PublicPlantCard } from "@/lib/publicPlants";
+import {
+  downloadPublicCatalog,
+  plantSubtitle,
+  plantTitle,
+  readPublicCatalog,
+  searchPublicPlants,
+  type PublicCatalogStatus,
+  type PublicPlantCard,
+} from "@/lib/publicPlants";
 import { colors } from "@/theme";
 
 export default function GuestHome() {
-  const { profile } = useAuth();
+  const { profile, online } = useAuth();
   const { locale, t } = usePreferences();
   const { width } = useWindowDimensions();
   const tileSize = Math.floor((width - 16 * 2 - 12) / 2);
@@ -24,6 +32,9 @@ export default function GuestHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [eventsNote, setEventsNote] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<PublicCatalogStatus | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadNote, setDownloadNote] = useState<string | null>(null);
 
   const loadEvents = useCallback(async () => {
     const result = await listUpcomingEvents();
@@ -34,16 +45,16 @@ export default function GuestHome() {
   const load = useCallback(async (nextQuery: string) => {
     setError(null);
     try {
-      setPlants(await searchPublicPlants(nextQuery));
+      setPlants(await searchPublicPlants(nextQuery, online));
     } catch (cause) {
       setPlants([]);
       setError(cause instanceof Error ? cause.message : "Could not load plants.");
     }
-  }, []);
+  }, [online]);
 
   useEffect(() => {
     let cancelled = false;
-    searchPublicPlants("")
+    searchPublicPlants("", online)
       .then((next) => {
         if (cancelled) return;
         setPlants(next);
@@ -54,6 +65,18 @@ export default function GuestHome() {
         setPlants([]);
         setError(cause instanceof Error ? cause.message : "Could not load plants.");
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [online]);
+
+  useEffect(() => {
+    let cancelled = false;
+    readPublicCatalog()
+      .then((status) => {
+        if (!cancelled) setCatalog(status);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -74,6 +97,26 @@ export default function GuestHome() {
       cancelled = true;
     };
   }, [t.eventsUnavailable]);
+
+  async function downloadPlants() {
+    if (!online) {
+      setDownloadNote("Connect to the internet before downloading plants.");
+      return;
+    }
+    setDownloading(true);
+    setDownloadNote("Downloading plant details…");
+    try {
+      const status = await downloadPublicCatalog(setDownloadNote);
+      setCatalog(status);
+      setDownloadNote(null);
+      setPlants(await searchPublicPlants(query, true));
+      setError(null);
+    } catch (cause) {
+      setDownloadNote(cause instanceof Error ? cause.message : "Could not download plant details.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function search() {
     const next = draft.trim();
@@ -150,6 +193,20 @@ export default function GuestHome() {
             >
               <Text style={styles.scanButtonText}>Scan QR</Text>
             </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={downloading}
+              style={({ pressed }) => [styles.downloadButton, pressed && styles.scanButtonPressed, downloading && styles.downloadBusy]}
+              onPress={downloadPlants}
+            >
+              <Text style={styles.downloadButtonText}>{downloading ? "Downloading…" : catalog ? "Update offline plants" : "Download for offline"}</Text>
+            </Pressable>
+            <Text style={styles.catalogNote}>
+              {catalog
+                ? catalogLabel(catalog)
+                : "Download plant details before a visit. They stay on this phone until the next download."}
+            </Text>
+            {downloadNote ? <Text style={styles.error}>{downloadNote}</Text> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
           </View>
           <View style={styles.events}>
@@ -169,12 +226,29 @@ export default function GuestHome() {
           </>
         }
         ListEmptyComponent={
-          error ? undefined : <Text style={styles.empty}>{query ? "No plants match that search." : "No published plants yet."}</Text>
+          error ? undefined : (
+            <Text style={styles.empty}>
+              {query
+                ? "No plants match that search."
+                : online
+                  ? "No published plants yet."
+                  : "No plant details are saved on this phone yet."}
+            </Text>
+          )
         }
         renderItem={({ item }) => <PlantTile plant={item} size={tileSize} />}
       />
     </SafeAreaView>
   );
+}
+
+function catalogLabel(status: PublicCatalogStatus) {
+  const date = new Date(status.savedAt);
+  const when = Number.isNaN(date.getTime())
+    ? status.savedAt
+    : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const count = status.plantCount === 1 ? "1 plant" : `${status.plantCount} plants`;
+  return `Saved on this phone · ${when} · ${count}`;
 }
 
 function PlantTile({ plant, size }: { plant: PublicPlantCard; size: number }) {
@@ -296,6 +370,17 @@ const styles = StyleSheet.create({
   },
   scanButtonText: { color: colors.forest, fontWeight: "700", fontSize: 16 },
   scanButtonPressed: { backgroundColor: colors.okBg },
+  downloadButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: colors.forest,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  downloadBusy: { opacity: 0.7 },
+  downloadButtonText: { color: "#fffdf8", fontWeight: "700", fontSize: 16 },
+  catalogNote: { color: "#5c6560", fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 14 },
   empty: {
     backgroundColor: "#fffcf8",

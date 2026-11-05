@@ -46,7 +46,7 @@ export default function TaggedPlantScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Notice tone="warn">
             {hit.offline
-              ? "This tag is not saved on the phone. Connect and scan it again."
+              ? "This tag is not saved on the phone. Download plant details while you have internet, then scan again."
               : `No published plant was found for ${code}.`}
           </Notice>
         </ScrollView>

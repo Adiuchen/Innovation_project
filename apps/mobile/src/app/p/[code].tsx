@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PhotoGallery } from "@/components/PhotoGallery";
+import { useAuth } from "@/lib/auth";
 import { firstParam } from "@/lib/plant";
 import { loadPublicPlant, plantSubtitle, plantTitle, type PublicPlantDetail } from "@/lib/publicPlants";
 import { colors } from "@/theme";
@@ -18,13 +19,17 @@ const lifeStageLabels: Record<string, string> = {
 export default function PublicPlantScreen() {
   const { code: rawCode } = useLocalSearchParams<{ code: string }>();
   const code = decodeURIComponent(firstParam(rawCode));
+  const { online } = useAuth();
   const [plant, setPlant] = useState<PublicPlantDetail | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    loadPublicPlant(code)
+    loadPublicPlant(code, online)
       .then((result) => {
-        if (!cancelled) setPlant(result);
+        if (!cancelled) {
+          setPlant(result);
+          setError(null);
+        }
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
@@ -35,7 +40,7 @@ export default function PublicPlantScreen() {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, online]);
 
   const title = plant ? plantTitle(plant) : "Plant";
   const subtitle = plant ? plantSubtitle(plant) : "";
@@ -53,9 +58,15 @@ export default function PublicPlantScreen() {
       {plant === undefined ? (
         <Text style={styles.status}>Looking up this plant…</Text>
       ) : error ? (
-        <Text style={styles.status}>{error}</Text>
+        <Text style={styles.status}>
+          {online ? error : "This plant is not saved on this phone. Download plant details while you have internet."}
+        </Text>
       ) : !plant ? (
-        <Text style={styles.status}>No published plant was found for {code}.</Text>
+        <Text style={styles.status}>
+          {online
+            ? `No published plant was found for ${code}.`
+            : "This plant is not saved on this phone. Download plant details while you have internet."}
+        </Text>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {photos.length > 0 ? (

@@ -1,6 +1,31 @@
 import * as SQLite from "expo-sqlite";
 import type { CachedRecord, Draft, LocalPhoto, PhotoRef, Species } from "@/types";
 
+export type StoredPublicPlant = {
+  qr_code: string;
+  plant_name: string | null;
+  scientific_name: string | null;
+  common_name: string | null;
+  local_name: string | null;
+  family: string | null;
+  genus: string | null;
+  description: string | null;
+  distribution: string | null;
+  ecological_info: string | null;
+  cultural_significance: string | null;
+  conservation_status: string | null;
+  health_status: string | null;
+  location_name: string | null;
+  life_stage: string | null;
+  height_m: number | null;
+  photos: PhotoRef[];
+};
+
+export type PublicCatalogStatus = {
+  savedAt: string;
+  plantCount: number;
+};
+
 type SpeciesRow = Omit<Species, "photos"> & { photos_json: string | null };
 type RecordRow = Omit<CachedRecord, "photos"> & { photos_json: string | null };
 
@@ -87,6 +112,30 @@ async function database() {
         );
         CREATE INDEX IF NOT EXISTS records_user ON records(user_id);
         CREATE INDEX IF NOT EXISTS records_qr ON records(qr_code);
+        CREATE TABLE IF NOT EXISTS public_plants (
+          qr_code TEXT PRIMARY KEY NOT NULL,
+          plant_name TEXT,
+          scientific_name TEXT,
+          common_name TEXT,
+          local_name TEXT,
+          family TEXT,
+          genus TEXT,
+          description TEXT,
+          distribution TEXT,
+          ecological_info TEXT,
+          cultural_significance TEXT,
+          conservation_status TEXT,
+          health_status TEXT,
+          location_name TEXT,
+          life_stage TEXT,
+          height_m REAL,
+          photos_json TEXT
+        );
+        CREATE TABLE IF NOT EXISTS public_catalog (
+          id TEXT PRIMARY KEY NOT NULL,
+          saved_at TEXT NOT NULL,
+          plant_count INTEGER NOT NULL
+        );
       `);
       for (const statement of [
         "ALTER TABLE drafts ADD COLUMN plant_name TEXT",
@@ -348,4 +397,131 @@ export async function getRecordByQr(code: string) {
   const db = await database();
   const row = await db.getFirstAsync<RecordRow>("SELECT * FROM records WHERE qr_code = ?", code);
   return row ? toRecord(row) : null;
+}
+
+type PublicPlantRow = Omit<StoredPublicPlant, "photos"> & { photos_json: string | null };
+
+function toStoredPublicPlant(row: PublicPlantRow): StoredPublicPlant {
+  const { photos_json, ...rest } = row;
+  return { ...rest, photos: parsePhotos(photos_json) };
+}
+
+async function writePublicPlant(db: SQLite.SQLiteDatabase, item: StoredPublicPlant) {
+  await db.runAsync(
+    `INSERT INTO public_plants (
+      qr_code, plant_name, scientific_name, common_name, local_name, family, genus, description,
+      distribution, ecological_info, cultural_significance, conservation_status, health_status,
+      location_name, life_stage, height_m, photos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(qr_code) DO UPDATE SET
+      plant_name = excluded.plant_name,
+      scientific_name = excluded.scientific_name,
+      common_name = excluded.common_name,
+      local_name = excluded.local_name,
+      family = excluded.family,
+      genus = excluded.genus,
+      description = excluded.description,
+      distribution = excluded.distribution,
+      ecological_info = excluded.ecological_info,
+      cultural_significance = excluded.cultural_significance,
+      conservation_status = excluded.conservation_status,
+      health_status = excluded.health_status,
+      location_name = excluded.location_name,
+      life_stage = excluded.life_stage,
+      height_m = excluded.height_m,
+      photos_json = excluded.photos_json`,
+    item.qr_code,
+    item.plant_name,
+    item.scientific_name,
+    item.common_name,
+    item.local_name,
+    item.family,
+    item.genus,
+    item.description,
+    item.distribution,
+    item.ecological_info,
+    item.cultural_significance,
+    item.conservation_status,
+    item.health_status,
+    item.location_name,
+    item.life_stage,
+    item.height_m,
+    JSON.stringify(item.photos),
+  );
+}
+
+export async function replaceCachedPublicPlants(plants: StoredPublicPlant[], savedAt: string) {
+  const db = await database();
+  const seen = new Set<string>();
+  const unique = plants.filter((plant) => {
+    if (!plant.qr_code || seen.has(plant.qr_code)) return false;
+    seen.add(plant.qr_code);
+    return true;
+  });
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM public_plants");
+    for (const item of unique) await writePublicPlant(db, item);
+    await db.runAsync(
+      `INSERT INTO public_catalog (id, saved_at, plant_count) VALUES ('published', ?, ?)
+       ON CONFLICT(id) DO UPDATE SET saved_at = excluded.saved_at, plant_count = excluded.plant_count`,
+      savedAt,
+      unique.length,
+    );
+  });
+}
+
+export async function upsertCachedPublicPlant(plant: StoredPublicPlant) {
+  const db = await database();
+  await writePublicPlant(db, plant);
+}
+
+export async function deleteCachedPublicPlant(code: string) {
+  const db = await database();
+  await db.runAsync("DELETE FROM public_plants WHERE qr_code = ?", code);
+  await db.runAsync(
+    `UPDATE public_catalog
+     SET plant_count = (SELECT COUNT(*) FROM public_plants)
+     WHERE id = 'published'`,
+  );
+}
+
+export async function getCachedPublicPlant(code: string) {
+  const db = await database();
+  const row = await db.getFirstAsync<PublicPlantRow>("SELECT * FROM public_plants WHERE qr_code = ?", code);
+  return row ? toStoredPublicPlant(row) : null;
+}
+
+export async function searchCachedPublicPlants(query: string) {
+  const db = await database();
+  const needle = query.trim().replace(/[%_]/g, "");
+  if (!needle) {
+    const rows = await db.getAllAsync<PublicPlantRow>(
+      "SELECT * FROM public_plants ORDER BY COALESCE(plant_name, scientific_name) COLLATE NOCASE LIMIT 50",
+    );
+    return rows.map(toStoredPublicPlant);
+  }
+  const like = `%${needle}%`;
+  const rows = await db.getAllAsync<PublicPlantRow>(
+    `SELECT * FROM public_plants
+     WHERE plant_name LIKE ? COLLATE NOCASE
+        OR scientific_name LIKE ? COLLATE NOCASE
+        OR common_name LIKE ? COLLATE NOCASE
+        OR local_name LIKE ? COLLATE NOCASE
+     ORDER BY COALESCE(plant_name, scientific_name) COLLATE NOCASE
+     LIMIT 50`,
+    like,
+    like,
+    like,
+    like,
+  );
+  return rows.map(toStoredPublicPlant);
+}
+
+export async function publicCatalogStatus() {
+  const db = await database();
+  const row = await db.getFirstAsync<{ saved_at: string; plant_count: number }>(
+    "SELECT saved_at, plant_count FROM public_catalog WHERE id = 'published'",
+  );
+  if (!row) return null;
+  return { savedAt: row.saved_at, plantCount: row.plant_count } satisfies PublicCatalogStatus;
 }
