@@ -72,6 +72,9 @@ export default function RecordDetailScreen() {
       {record.review_note && <Notice tone="warn">Officer note: {record.review_note}</Notice>}
       {message && <Notice tone="danger">{message}</Notice>}
       {saved && !message && <Notice tone="ok">{saved}</Notice>}
+      {record.status === "submitted" ? (
+        <Notice>Submitted for review — view only until a conservation officer finishes review.</Notice>
+      ) : null}
 
       {editable && profile.role === "botanist" ? (
         <RecordForm
@@ -152,47 +155,51 @@ export default function RecordDetailScreen() {
         />
       )}
 
-      {record.status === "approved" && !record.qr_code && profile.role === "botanist" && (
-        <Button
-          label={working ? "Generating…" : "Generate QR code"}
-          disabled={working || !online}
-          onPress={async () => {
-            if (!online) {
-              setMessage("Connect to the network before generating a QR code.");
-              return;
-            }
-            setWorking(true);
-            const result = await generateRecordQr(record.uuid);
-            setWorking(false);
-            if (result.error || !result.code) {
-              setMessage(result.error ?? "Could not generate a QR code.");
-              return;
-            }
-            setRecord({ ...record, qr_code: result.code });
-            await syncNow();
-            await load();
-          }}
-        />
+      {!record.qr_code && profile.role === "botanist" && (
+        <>
+          <Notice tone="warn">
+            This record is missing a QR tag. Repair assigns a stable code from the record id and does not change an
+            existing printed tag.
+          </Notice>
+          <Button
+            label={working ? "Repairing…" : "Repair missing QR code"}
+            disabled={working || !online}
+            onPress={async () => {
+              if (!online) {
+                setMessage("Connect to the network before repairing a missing QR code.");
+                return;
+              }
+              setWorking(true);
+              const result = await generateRecordQr(record.uuid);
+              setWorking(false);
+              if (result.error || !result.code) {
+                setMessage(result.error ?? "Could not repair the QR code.");
+                return;
+              }
+              setRecord({ ...record, qr_code: result.code });
+              await syncNow();
+              await load();
+            }}
+          />
+        </>
       )}
-      {record.status === "approved" && !record.qr_code && !online && (
-        <Notice tone="warn">Connect to generate the QR tag after this record is approved.</Notice>
+      {!record.qr_code && !online && (
+        <Notice tone="warn">Connect to repair a missing QR tag, or submit a new record offline to assign one.</Notice>
       )}
-      {record.status !== "approved" && !record.qr_code && (
-        <Notice>A QR tag can be generated after a conservation officer approves this record.</Notice>
-      )}
-      {qrValue && record.qr_code && (
+      {qrValue && record.qr_code ? (
         <View style={styles.qr}>
           <QRCode value={qrValue} size={180} />
           <Text style={styles.meta}>{record.qr_code}</Text>
           <Text style={styles.meta}>{qrValue}</Text>
-          <PrintQrButton qrCode={record.qr_code} />
-          {!siteUrl && (
+          <PrintQrButton qrCode={record.qr_code} label={record.plant_name || record.qr_code} />
+          {!siteUrl ? (
             <Notice tone="warn">
-              Set EXPO_PUBLIC_SITE_URL to the website address so a printed tag opens the public plant page. This code can already be scanned inside the app.
+              Set EXPO_PUBLIC_SITE_URL to the website address so a printed tag opens the public plant page. This code
+              can already be scanned inside the app.
             </Notice>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
     </Screen>
   );
 }

@@ -118,7 +118,7 @@ export default async function RecordDetail({
         </form>
       )}
 
-      {record.status === "approved" && !record.qr_code && (
+      {!record.qr_code && (
         <form action={generateQr} className="mt-4">
           <input type="hidden" name="id" value={record.uuid} />
           <button className="btn" type="submit">{t.generateQr}</button>

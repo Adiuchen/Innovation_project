@@ -8,8 +8,8 @@ export default function EventsLayout() {
   return (
     <Stack screenOptions={headerOptions}>
       <Stack.Screen name="index" options={{ title: t.events, headerLeft: () => <HeaderExit /> }} />
-      <Stack.Screen name="new" options={{ title: t.addEvent, headerLeft: () => <HeaderExit mode="back" /> }} />
-      <Stack.Screen name="[id]" options={{ title: t.editEvent, headerLeft: () => <HeaderExit mode="back" /> }} />
+      <Stack.Screen name="new" options={{ title: t.addEvent, headerLeft: () => <HeaderExit fallback="/events" /> }} />
+      <Stack.Screen name="[id]" options={{ title: t.editEvent, headerLeft: () => <HeaderExit fallback="/events" /> }} />
     </Stack>
   );
 }

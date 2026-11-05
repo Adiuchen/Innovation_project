@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { copyPhotoIntoApp } from "@/lib/photos";
 import { useAuth } from "@/lib/auth";
@@ -24,9 +24,23 @@ const themes: { key: ThemeChoice; label: "day" | "night" | "auto" }[] = [
 
 export default function SettingsScreen() {
   const { profile, signOut } = useAuth();
-  const { avatarUri, locale, theme, palette, t, setAvatarUri, setLocale, setTheme } = usePreferences();
+  const {
+    avatarUri,
+    locale,
+    theme,
+    palette,
+    printerIp,
+    printerPort,
+    t,
+    setAvatarUri,
+    setLocale,
+    setTheme,
+    setPrinterIp,
+    setPrinterPort,
+  } = usePreferences();
   const [photoNote, setPhotoNote] = useState<string | null>(null);
   const initial = profile?.name.trim().charAt(0).toUpperCase() || "?";
+  const showPrinter = profile?.role === "botanist" || profile?.role === "conservation_officer";
 
   async function changeAvatar() {
     setPhotoNote(null);
@@ -100,6 +114,37 @@ export default function SettingsScreen() {
           ))}
         </View>
 
+        {showPrinter ? (
+          <>
+            <Text style={[styles.heading, { color: palette.muted }]}>{t.printerHeading}</Text>
+            <View style={[styles.group, { backgroundColor: palette.sheet, padding: 14, gap: 10 }]}>
+              <Text style={[styles.fieldLabel, { color: palette.muted }]}>{t.printerIp}</Text>
+              <TextInput
+                value={printerIp}
+                onChangeText={setPrinterIp}
+                placeholder="192.168.0.138"
+                placeholderTextColor={palette.muted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="decimal-pad"
+                style={[styles.input, { color: palette.ink, borderColor: palette.line, backgroundColor: palette.field }]}
+              />
+              <Text style={[styles.fieldLabel, { color: palette.muted }]}>{t.printerPort}</Text>
+              <TextInput
+                value={printerPort}
+                onChangeText={setPrinterPort}
+                placeholder="9100"
+                placeholderTextColor={palette.muted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="number-pad"
+                style={[styles.input, { color: palette.ink, borderColor: palette.line, backgroundColor: palette.field }]}
+              />
+              <Text style={[styles.hintInline, { color: palette.muted }]}>{t.printerIpHint}</Text>
+            </View>
+          </>
+        ) : null}
+
         <Text style={[styles.hint, { color: palette.muted }]}>{t.logoutHint}</Text>
         <Pressable accessibilityRole="button" style={[styles.logout, { backgroundColor: palette.dangerBg }]} onPress={logout}>
           <Text style={[styles.logoutText, { color: palette.danger }]}>{t.logout}</Text>
@@ -124,6 +169,15 @@ const styles = StyleSheet.create({
   group: { borderRadius: 16, overflow: "hidden" },
   row: { minHeight: 48, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   rowLabel: { fontSize: 16 },
+  fieldLabel: { fontSize: 13, fontWeight: "700" },
+  input: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontSize: 16,
+  },
+  hintInline: { fontSize: 13, lineHeight: 18 },
   hint: { fontSize: 13, marginTop: 12 },
   logout: { minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   logoutText: { fontSize: 16, fontWeight: "700" },

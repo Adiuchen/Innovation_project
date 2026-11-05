@@ -10,6 +10,7 @@ import {
 } from "@/lib/db";
 import { isDisplayablePhoto } from "@/lib/photo-path";
 import { cachePhotoFiles } from "@/lib/photos";
+import { plantCodePrefix } from "@/lib/plant";
 import { supabase } from "@/lib/supabase";
 import type { PhotoRef } from "@/types";
 
@@ -108,6 +109,169 @@ export async function loadPublicPlant(code: string, online = true): Promise<Publ
     if (cached) return cached;
     throw error;
   }
+}
+
+export type GuestPlantPage =
+  | { kind: "plant"; plant: PublicPlantDetail }
+  | { kind: "in_progress"; code: string }
+  | { kind: "missing"; offline: boolean };
+
+export type ResolvedPlantTag = { qr_code: string; status: string };
+
+/**
+ * Map a scanned/printed tag to the canonical server qr_code.
+ * Offline submits use plant-{local_id[0:8]}; legacy approve may have minted plant-{server_uuid[0:8]}.
+ */
+export async function resolveCanonicalPlantTag(code: string): Promise<ResolvedPlantTag | null> {
+  const rpc = await supabase.rpc("resolve_plant_tag", { code });
+  if (!rpc.error) {
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : null;
+    if (row && typeof row.status === "string") {
+      const qr = typeof row.qr_code === "string" && row.qr_code ? row.qr_code : code;
+      return { qr_code: qr, status: row.status };
+    }
+  }
+
+  const byQr = await supabase.from("plant_records").select("qr_code, status").eq("qr_code", code).maybeSingle();
+  if (!byQr.error && byQr.data && typeof byQr.data.status === "string") {
+    return { qr_code: byQr.data.qr_code || code, status: byQr.data.status };
+  }
+
+  const prefix = plantCodePrefix(code);
+  if (prefix) {
+    const aliased = await supabase
+      .from("plant_records")
+      .select("qr_code, status, local_id, uuid")
+      .or(`local_id.ilike.${prefix}%,uuid.ilike.${prefix}%`)
+      .limit(5);
+    if (!aliased.error) {
+      const hit = (aliased.data ?? []).find((row) => {
+        const local = typeof row.local_id === "string" ? row.local_id.toLowerCase() : "";
+        const uuid = typeof row.uuid === "string" ? row.uuid.toLowerCase() : "";
+        return local.startsWith(prefix) || uuid.startsWith(prefix);
+      });
+      if (hit && typeof hit.status === "string") {
+        return { qr_code: hit.qr_code || code, status: hit.status };
+      }
+    }
+  }
+
+  const progress = await supabase.rpc("plant_tag_progress", { code });
+  if (!progress.error) {
+    const row = Array.isArray(progress.data) ? progress.data[0] : null;
+    if (row && typeof row.status === "string") return { qr_code: code, status: row.status };
+  }
+
+  return null;
+}
+
+/** Best-effort status for a tag. Never throws — RPC may be undeployed; guests may lack RLS. */
+export async function lookupTagStatus(code: string): Promise<string | null> {
+  const resolved = await resolveCanonicalPlantTag(code);
+  return resolved?.status ?? null;
+}
+
+/** When the public view is empty, build a guest page from an approved plant_records row (staff sessions). */
+async function fetchApprovedRecordAsPlant(code: string): Promise<PublicPlantDetail | null> {
+  const remote = await supabase
+    .from("plant_records")
+    .select(
+      "qr_code, plant_name, life_stage, location_name, height_m, health_status, status, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance)",
+    )
+    .eq("qr_code", code)
+    .eq("status", "approved")
+    .maybeSingle();
+
+  let row = (!remote.error && remote.data ? remote.data : null) as Record<string, unknown> | null;
+  if (!row) {
+    const prefix = plantCodePrefix(code);
+    if (prefix) {
+      const aliased = await supabase
+        .from("plant_records")
+        .select(
+          "qr_code, plant_name, life_stage, location_name, height_m, health_status, status, local_id, uuid, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance)",
+        )
+        .eq("status", "approved")
+        .or(`local_id.ilike.${prefix}%,uuid.ilike.${prefix}%`)
+        .limit(5);
+      const hit = (aliased.data ?? []).find((item) => {
+        const local = typeof item.local_id === "string" ? item.local_id.toLowerCase() : "";
+        const uuid = typeof item.uuid === "string" ? item.uuid.toLowerCase() : "";
+        return local.startsWith(prefix) || uuid.startsWith(prefix);
+      });
+      if (hit) row = hit as Record<string, unknown>;
+    }
+  }
+  if (!row) return null;
+
+  const canonical = textField(row, "qr_code") ?? code;
+  const speciesRaw = row.species;
+  const species = (Array.isArray(speciesRaw) ? speciesRaw[0] : speciesRaw) as Record<string, unknown> | null;
+  const photos = await supabase.from("public_plant_photos").select("storage_path, caption").eq("qr_code", canonical);
+  const visible = photos.error
+    ? []
+    : ((photos.data ?? []) as PublicPlantPhoto[]).filter(
+        (photo) => photo.storage_path && isDisplayablePhoto(photo.storage_path),
+      );
+
+  return {
+    qr_code: canonical,
+    plant_name: textField(row, "plant_name"),
+    scientific_name: textField(species ?? {}, "scientific_name"),
+    common_name: textField(species ?? {}, "common_name"),
+    local_name: textField(species ?? {}, "local_name"),
+    conservation_status: textField(species ?? {}, "conservation_status"),
+    health_status: textField(row, "health_status"),
+    family: textField(species ?? {}, "family"),
+    genus: textField(species ?? {}, "genus"),
+    description: textField(species ?? {}, "description"),
+    distribution: textField(species ?? {}, "distribution"),
+    ecological_info: textField(species ?? {}, "ecological_info"),
+    cultural_significance: textField(species ?? {}, "cultural_significance"),
+    location_name: textField(row, "location_name"),
+    height_m: typeof row.height_m === "number" ? row.height_m : null,
+    life_stage: textField(row, "life_stage"),
+    image_path: visible[0]?.storage_path ?? null,
+    photos: visible,
+  };
+}
+
+/** Guest / visitor path: approved public page, otherwise In Progress for a known non-approved tag. */
+export async function resolveGuestPlantPage(code: string, online = true): Promise<GuestPlantPage> {
+  try {
+    const plant = await loadPublicPlant(code, online);
+    if (plant) return { kind: "plant", plant };
+  } catch {
+    if (!online) return { kind: "missing", offline: true };
+  }
+
+  if (!online) {
+    const cached = await cachedPublicDetail(code).catch(() => null);
+    if (cached) return { kind: "plant", plant: cached };
+    return { kind: "missing", offline: true };
+  }
+
+  const resolved = await resolveCanonicalPlantTag(code).catch(() => null);
+  const canonical = resolved?.qr_code && resolved.qr_code !== code ? resolved.qr_code : null;
+  if (canonical) {
+    try {
+      const plant = await loadPublicPlant(canonical, true);
+      if (plant) return { kind: "plant", plant };
+    } catch {
+      // Fall through to record / status paths.
+    }
+  }
+
+  // Approved rows are readable to staff even when public_plant_pages has not caught up.
+  const fromRecord = await fetchApprovedRecordAsPlant(canonical ?? code).catch(() => null);
+  if (fromRecord) {
+    await upsertCachedPublicPlant(storedFromDetail(fromRecord)).catch(() => undefined);
+    return { kind: "plant", plant: fromRecord };
+  }
+
+  const status = resolved?.status ?? (await lookupTagStatus(code));
+  if (status && status !== "approved") return { kind: "in_progress", code };
+  return { kind: "missing", offline: false };
 }
 
 export async function cachedPublicDetail(code: string): Promise<PublicPlantDetail | null> {

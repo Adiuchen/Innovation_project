@@ -1,11 +1,24 @@
-import { router } from "expo-router";
+import { Href, router } from "expo-router";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { colors } from "@/theme";
 
-export function HeaderExit({ mode = "field" }: { mode?: "field" | "back" }) {
+export function HeaderExit({
+  mode = "field",
+  fallback,
+}: {
+  mode?: "field" | "back";
+  fallback?: Href;
+}) {
   function leave() {
-    if (mode === "back" && router.canGoBack()) router.back();
-    else router.navigate("/field");
+    if (mode === "back" && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (fallback) {
+      router.navigate(fallback);
+      return;
+    }
+    router.navigate("/field");
   }
 
   return (

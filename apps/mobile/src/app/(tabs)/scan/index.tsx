@@ -26,7 +26,7 @@ export default function ScanScreen() {
     const code = parsePlantCode(raw);
     if (!code || locked.current) return;
     locked.current = true;
-    router.push({ pathname: "/p/[code]", params: { code } });
+    router.push({ pathname: "/scan/[code]", params: { code } });
   }
 
   function leave() {

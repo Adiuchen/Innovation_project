@@ -5,7 +5,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useAuth } from "@/lib/auth";
 import { firstParam } from "@/lib/plant";
-import { loadPublicPlant, plantSubtitle, plantTitle, type PublicPlantDetail } from "@/lib/publicPlants";
+import {
+  plantSubtitle,
+  plantTitle,
+  resolveGuestPlantPage,
+  type GuestPlantPage,
+  type PublicPlantDetail,
+} from "@/lib/publicPlants";
 import { colors } from "@/theme";
 
 const lifeStageLabels: Record<string, string> = {
@@ -20,20 +26,21 @@ export default function PublicPlantScreen() {
   const { code: rawCode } = useLocalSearchParams<{ code: string }>();
   const code = decodeURIComponent(firstParam(rawCode));
   const { online } = useAuth();
-  const [plant, setPlant] = useState<PublicPlantDetail | null | undefined>(undefined);
+  const [page, setPage] = useState<GuestPlantPage | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    loadPublicPlant(code, online)
+    resolveGuestPlantPage(code, online)
       .then((result) => {
         if (!cancelled) {
-          setPlant(result);
+          setPage(result);
           setError(null);
         }
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setPlant(null);
+          setPage(null);
           setError(cause instanceof Error ? cause.message : "Could not load this plant.");
         }
       });
@@ -42,64 +49,86 @@ export default function PublicPlantScreen() {
     };
   }, [code, online]);
 
-  const title = plant ? plantTitle(plant) : "Plant";
-  const subtitle = plant ? plantSubtitle(plant) : "";
-  const photos = plant?.photos ?? [];
-
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
       <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={8}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/");
+          }}
+          hitSlop={8}
+        >
           <Text style={styles.back}>‹</Text>
         </Pressable>
         <Text style={styles.topTitle}>Details</Text>
         <View style={styles.topSpacer} />
       </View>
-      {plant === undefined ? (
+      {page === null && !error ? (
         <Text style={styles.status}>Looking up this plant…</Text>
       ) : error ? (
         <Text style={styles.status}>
           {online ? error : "This plant is not saved on this phone. Download plant details while you have internet."}
         </Text>
-      ) : !plant ? (
+      ) : page?.kind === "in_progress" ? (
+        <View style={styles.progress}>
+          <Text style={styles.progressTitle}>In Progress</Text>
+          <Text style={styles.progressBody}>
+            This plant tag is registered and waiting for review. Public details will appear here after a conservation
+            officer approves the record.
+          </Text>
+          <Text style={styles.progressCode}>{code}</Text>
+        </View>
+      ) : page?.kind === "missing" ? (
         <Text style={styles.status}>
-          {online
-            ? `No published plant was found for ${code}.`
-            : "This plant is not saved on this phone. Download plant details while you have internet."}
+          {page.offline
+            ? "This plant is not saved on this phone. Download plant details while you have internet."
+            : `No published plant was found for ${code}.`}
         </Text>
-      ) : (
-        <ScrollView contentContainerStyle={styles.content}>
-          {photos.length > 0 ? (
-            <PhotoGallery photos={photos} height={280} radius={28} />
-          ) : (
-            <View style={[styles.hero, styles.heroEmpty]}>
-              <Text style={styles.heroEmptyText}>No photograph yet</Text>
-            </View>
-          )}
-          <Text style={styles.name}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : <Text style={styles.subtitle}>No common name</Text>}
-          <View style={styles.pills}>
-            {plant.conservation_status ? <Text style={styles.pill}>{plant.conservation_status}</Text> : null}
-            {plant.health_status ? <Text style={styles.pillMuted}>Health: {plant.health_status}</Text> : null}
-            {plant.life_stage ? (
-              <Text style={styles.pillMuted}>{lifeStageLabels[plant.life_stage] ?? plant.life_stage}</Text>
-            ) : null}
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>General information</Text>
-            <Text style={styles.body}>{plant.description || "No description has been published for this plant yet."}</Text>
-            <Fact label="Family" value={plant.family} />
-            <Fact label="Genus" value={plant.genus} />
-            <Fact label="Scientific name" value={plant.scientific_name} />
-            <Fact label="Distribution" value={plant.distribution} />
-            <Fact label="Ecology" value={plant.ecological_info} />
-            <Fact label="Cultural significance" value={plant.cultural_significance} />
-            <Fact label="Place" value={plant.location_name} />
-            <Fact label="Height" value={plant.height_m != null ? `${plant.height_m} m` : null} />
-          </View>
-        </ScrollView>
-      )}
+      ) : page?.kind === "plant" ? (
+        <PlantDetails plant={page.plant} />
+      ) : null}
     </SafeAreaView>
+  );
+}
+
+function PlantDetails({ plant }: { plant: PublicPlantDetail }) {
+  const title = plantTitle(plant);
+  const subtitle = plantSubtitle(plant);
+  const photos = plant.photos ?? [];
+
+  return (
+    <ScrollView contentContainerStyle={styles.content}>
+      {photos.length > 0 ? (
+        <PhotoGallery photos={photos} height={280} radius={28} />
+      ) : (
+        <View style={[styles.hero, styles.heroEmpty]}>
+          <Text style={styles.heroEmptyText}>No photograph yet</Text>
+        </View>
+      )}
+      <Text style={styles.name}>{title}</Text>
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : <Text style={styles.subtitle}>No common name</Text>}
+      <View style={styles.pills}>
+        {plant.conservation_status ? <Text style={styles.pill}>{plant.conservation_status}</Text> : null}
+        {plant.health_status ? <Text style={styles.pillMuted}>Health: {plant.health_status}</Text> : null}
+        {plant.life_stage ? (
+          <Text style={styles.pillMuted}>{lifeStageLabels[plant.life_stage] ?? plant.life_stage}</Text>
+        ) : null}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>General information</Text>
+        <Text style={styles.body}>{plant.description || "No description has been published for this plant yet."}</Text>
+        <Fact label="Family" value={plant.family} />
+        <Fact label="Genus" value={plant.genus} />
+        <Fact label="Scientific name" value={plant.scientific_name} />
+        <Fact label="Distribution" value={plant.distribution} />
+        <Fact label="Ecology" value={plant.ecological_info} />
+        <Fact label="Cultural significance" value={plant.cultural_significance} />
+        <Fact label="Place" value={plant.location_name} />
+        <Fact label="Height" value={plant.height_m != null ? `${plant.height_m} m` : null} />
+      </View>
+    </ScrollView>
   );
 }
 
@@ -126,6 +155,10 @@ const styles = StyleSheet.create({
   topTitle: { fontSize: 17, fontWeight: "700", color: colors.ink },
   topSpacer: { width: 36 },
   status: { color: colors.muted, fontSize: 16, padding: 20 },
+  progress: { padding: 24, gap: 12 },
+  progressTitle: { fontSize: 32, fontWeight: "700", color: colors.ink },
+  progressBody: { color: colors.muted, fontSize: 16, lineHeight: 24 },
+  progressCode: { color: colors.forest, fontSize: 15, fontWeight: "700", marginTop: 8 },
   content: { padding: 16, paddingBottom: 32, gap: 12 },
   hero: { width: "100%", height: 280, borderRadius: 28, backgroundColor: "#d7e6da" },
   heroEmpty: { alignItems: "center", justifyContent: "center" },

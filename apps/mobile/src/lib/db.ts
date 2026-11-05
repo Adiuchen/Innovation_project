@@ -41,117 +41,150 @@ function parsePhotos(value: string | null): PhotoRef[] {
   }
 }
 
+async function tableColumns(db: SQLite.SQLiteDatabase, table: string) {
+  const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  return new Set(rows.map((row) => row.name));
+}
+
+async function ensureColumn(db: SQLite.SQLiteDatabase, table: string, column: string, typeSql: string) {
+  const columns = await tableColumns(db, table);
+  if (columns.has(column)) return;
+  await db.runAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeSql}`);
+  const after = await tableColumns(db, table);
+  if (!after.has(column)) {
+    throw new Error(`Could not add ${table}.${column} to the phone database.`);
+  }
+}
+
+async function migrateSchema(db: SQLite.SQLiteDatabase) {
+  // Do not put indexes on late-added columns in the CREATE batch — existing phones already
+  // have drafts without qr_code, and a failed CREATE INDEX aborts the whole batch.
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS species (
+      uuid TEXT PRIMARY KEY NOT NULL,
+      code TEXT NOT NULL,
+      scientific_name TEXT NOT NULL,
+      common_name TEXT,
+      local_name TEXT,
+      family TEXT,
+      genus TEXT,
+      description TEXT,
+      conservation_status TEXT,
+      distribution TEXT,
+      ecological_info TEXT,
+      cultural_significance TEXT,
+      photos_json TEXT
+    );
+    CREATE TABLE IF NOT EXISTS drafts (
+      local_id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      remote_uuid TEXT,
+      species_id TEXT,
+      species_label TEXT,
+      plant_name TEXT,
+      life_stage TEXT,
+      height_m TEXT,
+      trunk_diameter_cm TEXT,
+      latitude TEXT,
+      longitude TEXT,
+      location_name TEXT,
+      leaf_traits TEXT,
+      flower_fruit_traits TEXT,
+      health_status TEXT,
+      other_traits TEXT,
+      photo_uri TEXT,
+      photo_caption TEXT,
+      photo_remote_url TEXT,
+      qr_code TEXT,
+      status TEXT NOT NULL,
+      saved_at TEXT NOT NULL,
+      sync_error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS drafts_user ON drafts(user_id);
+    CREATE TABLE IF NOT EXISTS records (
+      uuid TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      code TEXT,
+      species_id TEXT,
+      species_name TEXT,
+      common_name TEXT,
+      plant_name TEXT,
+      life_stage TEXT,
+      status TEXT,
+      location_name TEXT,
+      latitude REAL,
+      longitude REAL,
+      height_m REAL,
+      trunk_diameter_cm REAL,
+      leaf_traits TEXT,
+      flower_fruit_traits TEXT,
+      health_status TEXT,
+      other_traits TEXT,
+      qr_code TEXT,
+      review_note TEXT,
+      recorded_at TEXT,
+      photos_json TEXT
+    );
+    CREATE INDEX IF NOT EXISTS records_user ON records(user_id);
+    CREATE TABLE IF NOT EXISTS public_plants (
+      qr_code TEXT PRIMARY KEY NOT NULL,
+      plant_name TEXT,
+      scientific_name TEXT,
+      common_name TEXT,
+      local_name TEXT,
+      family TEXT,
+      genus TEXT,
+      description TEXT,
+      distribution TEXT,
+      ecological_info TEXT,
+      cultural_significance TEXT,
+      conservation_status TEXT,
+      health_status TEXT,
+      location_name TEXT,
+      life_stage TEXT,
+      height_m REAL,
+      photos_json TEXT
+    );
+    CREATE TABLE IF NOT EXISTS public_catalog (
+      id TEXT PRIMARY KEY NOT NULL,
+      saved_at TEXT NOT NULL,
+      plant_count INTEGER NOT NULL
+    );
+  `);
+
+  await ensureColumn(db, "drafts", "plant_name", "TEXT");
+  await ensureColumn(db, "drafts", "life_stage", "TEXT");
+  await ensureColumn(db, "drafts", "photos_json", "TEXT");
+  await ensureColumn(db, "drafts", "qr_code", "TEXT");
+  await ensureColumn(db, "records", "plant_name", "TEXT");
+  await ensureColumn(db, "records", "life_stage", "TEXT");
+  await ensureColumn(db, "records", "qr_code", "TEXT");
+
+  // Indexes that depend on migrated columns — create only after ensureColumn.
+  for (const statement of [
+    "CREATE INDEX IF NOT EXISTS drafts_qr ON drafts(qr_code)",
+    "CREATE INDEX IF NOT EXISTS records_qr ON records(qr_code)",
+  ]) {
+    try {
+      await db.execAsync(statement);
+    } catch {
+      // Index may already exist.
+    }
+  }
+}
+
 async function database() {
   if (!databasePromise) {
-    databasePromise = SQLite.openDatabaseAsync("plant-field.db").then(async (db) => {
-      await db.execAsync(`
-        PRAGMA journal_mode = WAL;
-        CREATE TABLE IF NOT EXISTS species (
-          uuid TEXT PRIMARY KEY NOT NULL,
-          code TEXT NOT NULL,
-          scientific_name TEXT NOT NULL,
-          common_name TEXT,
-          local_name TEXT,
-          family TEXT,
-          genus TEXT,
-          description TEXT,
-          conservation_status TEXT,
-          distribution TEXT,
-          ecological_info TEXT,
-          cultural_significance TEXT,
-          photos_json TEXT
-        );
-        CREATE TABLE IF NOT EXISTS drafts (
-          local_id TEXT PRIMARY KEY NOT NULL,
-          user_id TEXT NOT NULL,
-          remote_uuid TEXT,
-          species_id TEXT,
-          species_label TEXT,
-          plant_name TEXT,
-          life_stage TEXT,
-          height_m TEXT,
-          trunk_diameter_cm TEXT,
-          latitude TEXT,
-          longitude TEXT,
-          location_name TEXT,
-          leaf_traits TEXT,
-          flower_fruit_traits TEXT,
-          health_status TEXT,
-          other_traits TEXT,
-          photo_uri TEXT,
-          photo_caption TEXT,
-          photo_remote_url TEXT,
-          status TEXT NOT NULL,
-          saved_at TEXT NOT NULL,
-          sync_error TEXT
-        );
-        CREATE INDEX IF NOT EXISTS drafts_user ON drafts(user_id);
-        CREATE TABLE IF NOT EXISTS records (
-          uuid TEXT PRIMARY KEY NOT NULL,
-          user_id TEXT NOT NULL,
-          code TEXT,
-          species_id TEXT,
-          species_name TEXT,
-          common_name TEXT,
-          plant_name TEXT,
-          life_stage TEXT,
-          status TEXT,
-          location_name TEXT,
-          latitude REAL,
-          longitude REAL,
-          height_m REAL,
-          trunk_diameter_cm REAL,
-          leaf_traits TEXT,
-          flower_fruit_traits TEXT,
-          health_status TEXT,
-          other_traits TEXT,
-          qr_code TEXT,
-          review_note TEXT,
-          recorded_at TEXT,
-          photos_json TEXT
-        );
-        CREATE INDEX IF NOT EXISTS records_user ON records(user_id);
-        CREATE INDEX IF NOT EXISTS records_qr ON records(qr_code);
-        CREATE TABLE IF NOT EXISTS public_plants (
-          qr_code TEXT PRIMARY KEY NOT NULL,
-          plant_name TEXT,
-          scientific_name TEXT,
-          common_name TEXT,
-          local_name TEXT,
-          family TEXT,
-          genus TEXT,
-          description TEXT,
-          distribution TEXT,
-          ecological_info TEXT,
-          cultural_significance TEXT,
-          conservation_status TEXT,
-          health_status TEXT,
-          location_name TEXT,
-          life_stage TEXT,
-          height_m REAL,
-          photos_json TEXT
-        );
-        CREATE TABLE IF NOT EXISTS public_catalog (
-          id TEXT PRIMARY KEY NOT NULL,
-          saved_at TEXT NOT NULL,
-          plant_count INTEGER NOT NULL
-        );
-      `);
-      for (const statement of [
-        "ALTER TABLE drafts ADD COLUMN plant_name TEXT",
-        "ALTER TABLE drafts ADD COLUMN life_stage TEXT",
-        "ALTER TABLE records ADD COLUMN plant_name TEXT",
-        "ALTER TABLE records ADD COLUMN life_stage TEXT",
-        "ALTER TABLE drafts ADD COLUMN photos_json TEXT",
-      ]) {
-        try {
-          await db.execAsync(statement);
-        } catch {
-          // This phone already has the column.
-        }
-      }
-      return db;
-    });
+    databasePromise = SQLite.openDatabaseAsync("plant-field.db")
+      .then(async (db) => {
+        await migrateSchema(db);
+        return db;
+      })
+      .catch((error) => {
+        databasePromise = null;
+        throw error;
+      });
   }
   return databasePromise;
 }
@@ -210,10 +243,11 @@ export async function getSpecies(uuid: string) {
   return row ? toSpecies(row) : null;
 }
 
-type DraftRow = Omit<Draft, "plant_name" | "life_stage" | "photos"> & {
+type DraftRow = Omit<Draft, "plant_name" | "life_stage" | "photos" | "qr_code"> & {
   plant_name: string | null;
   life_stage: string | null;
   photos_json: string | null;
+  qr_code: string | null;
 };
 
 function parseLocalPhotos(value: string | null): LocalPhoto[] {
@@ -244,12 +278,15 @@ function toDraft(row: DraftRow): Draft {
     ...rest,
     plant_name: rest.plant_name ?? "",
     life_stage: rest.life_stage ?? "",
+    qr_code: rest.qr_code ?? null,
     photos,
   };
 }
 
 export async function saveDraft(draft: Draft) {
   const db = await database();
+  // Hot reload can leave an old open handle; always confirm the column before write.
+  await ensureColumn(db, "drafts", "qr_code", "TEXT");
   const photos: LocalPhoto[] =
     draft.photos ??
     (draft.photo_uri
@@ -260,8 +297,8 @@ export async function saveDraft(draft: Draft) {
     `INSERT INTO drafts (
       local_id, user_id, remote_uuid, species_id, species_label, plant_name, life_stage, height_m, trunk_diameter_cm,
       latitude, longitude, location_name, leaf_traits, flower_fruit_traits, health_status,
-      other_traits, photo_uri, photo_caption, photo_remote_url, status, saved_at, sync_error, photos_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      other_traits, photo_uri, photo_caption, photo_remote_url, qr_code, status, saved_at, sync_error, photos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(local_id) DO UPDATE SET
       user_id = excluded.user_id,
       remote_uuid = excluded.remote_uuid,
@@ -281,6 +318,7 @@ export async function saveDraft(draft: Draft) {
       photo_uri = excluded.photo_uri,
       photo_caption = excluded.photo_caption,
       photo_remote_url = excluded.photo_remote_url,
+      qr_code = excluded.qr_code,
       status = excluded.status,
       saved_at = excluded.saved_at,
       sync_error = excluded.sync_error,
@@ -304,6 +342,7 @@ export async function saveDraft(draft: Draft) {
     first?.uri ?? null,
     first?.caption ?? "",
     first?.remote_url ?? null,
+    draft.qr_code,
     draft.status,
     draft.saved_at,
     draft.sync_error,
@@ -323,6 +362,12 @@ export async function listDrafts(userId: string) {
 export async function getDraft(localId: string) {
   const db = await database();
   const row = await db.getFirstAsync<DraftRow>("SELECT * FROM drafts WHERE local_id = ?", localId);
+  return row ? toDraft(row) : null;
+}
+
+export async function getDraftByQr(code: string) {
+  const db = await database();
+  const row = await db.getFirstAsync<DraftRow>("SELECT * FROM drafts WHERE qr_code = ?", code);
   return row ? toDraft(row) : null;
 }
 
@@ -391,6 +436,62 @@ export async function getRecord(uuid: string) {
   const db = await database();
   const row = await db.getFirstAsync<RecordRow>("SELECT * FROM records WHERE uuid = ?", uuid);
   return row ? toRecord(row) : null;
+}
+
+/** Cache one field record (e.g. after a staff QR scan) without wiping the botanist's list. */
+export async function upsertCachedRecord(item: CachedRecord) {
+  const db = await database();
+  await db.runAsync(
+    `INSERT INTO records (
+      uuid, user_id, code, species_id, species_name, common_name, plant_name, life_stage, status, location_name,
+      latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits,
+      health_status, other_traits, qr_code, review_note, recorded_at, photos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(uuid) DO UPDATE SET
+      user_id = excluded.user_id,
+      code = excluded.code,
+      species_id = excluded.species_id,
+      species_name = excluded.species_name,
+      common_name = excluded.common_name,
+      plant_name = excluded.plant_name,
+      life_stage = excluded.life_stage,
+      status = excluded.status,
+      location_name = excluded.location_name,
+      latitude = excluded.latitude,
+      longitude = excluded.longitude,
+      height_m = excluded.height_m,
+      trunk_diameter_cm = excluded.trunk_diameter_cm,
+      leaf_traits = excluded.leaf_traits,
+      flower_fruit_traits = excluded.flower_fruit_traits,
+      health_status = excluded.health_status,
+      other_traits = excluded.other_traits,
+      qr_code = excluded.qr_code,
+      review_note = excluded.review_note,
+      recorded_at = excluded.recorded_at,
+      photos_json = excluded.photos_json`,
+    item.uuid,
+    item.user_id,
+    item.code,
+    item.species_id,
+    item.species_name,
+    item.common_name,
+    item.plant_name,
+    item.life_stage,
+    item.status,
+    item.location_name,
+    item.latitude,
+    item.longitude,
+    item.height_m,
+    item.trunk_diameter_cm,
+    item.leaf_traits,
+    item.flower_fruit_traits,
+    item.health_status,
+    item.other_traits,
+    item.qr_code,
+    item.review_note,
+    item.recorded_at,
+    JSON.stringify(item.photos),
+  );
 }
 
 export async function getRecordByQr(code: string) {

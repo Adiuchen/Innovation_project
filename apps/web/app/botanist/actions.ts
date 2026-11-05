@@ -20,10 +20,15 @@ export async function createRecord(formData: FormData) {
     redirect(`/botanist/new?error=${encodeURIComponent(species.error)}`);
   }
 
+  const submitted = status === "submitted";
+  // Same stable tag rule as mobile: plant-{local_id[0:8]}, never regenerated from server uuid.
+  const localId = crypto.randomUUID();
+  const qrCode = submitted ? `plant-${localId.slice(0, 8)}` : null;
   const { data, error } = await supabase
     .from("plant_records")
     .insert({
       botanist_id: user.id,
+      local_id: localId,
       plant_name: textOrNull(formData.get("plant_name")),
       life_stage: choiceFromForm(formData, "life_stage"),
       species_id: species.id,
@@ -36,7 +41,8 @@ export async function createRecord(formData: FormData) {
       location_name: textOrNull(formData.get("location_name")),
       latitude: numberOrNull(formData.get("latitude")),
       longitude: numberOrNull(formData.get("longitude")),
-      status: status === "submitted" ? "submitted" : "draft",
+      qr_code: qrCode,
+      status: submitted ? "submitted" : "draft",
       sync_status: "synced",
     })
     .select("uuid")
@@ -85,7 +91,7 @@ export async function generateQr(formData: FormData) {
   const id = String(formData.get("id"));
   const { data: record } = await supabase
     .from("plant_records")
-    .select("status, qr_code")
+    .select("status, qr_code, local_id")
     .eq("uuid", id)
     .eq("botanist_id", user.id)
     .maybeSingle();
@@ -93,20 +99,20 @@ export async function generateQr(formData: FormData) {
   if (!record) {
     redirect(`/botanist/${id}?error=${encodeURIComponent("This record was not found.")}`);
   }
-  if (record.status !== "approved") {
-    redirect(`/botanist/${id}?error=${encodeURIComponent("A QR code can be created only after the record is approved.")}`);
-  }
   if (record.qr_code) {
     redirect(`/botanist/${id}`);
   }
 
-  const qrCode = `plant-${id.slice(0, 8)}`;
+  // Rare repair path: prefer local_id so the tag matches offline/mobile prints.
+  const seed =
+    typeof record.local_id === "string" && record.local_id.length >= 8 ? record.local_id : id;
+  const qrCode = `plant-${seed.slice(0, 8)}`;
   const { error } = await supabase
     .from("plant_records")
     .update({ qr_code: qrCode })
     .eq("uuid", id)
     .eq("botanist_id", user.id)
-    .eq("status", "approved");
+    .is("qr_code", null);
   if (error) {
     redirect(`/botanist/${id}?error=${encodeURIComponent(error.message)}`);
   }
@@ -118,7 +124,7 @@ export async function resubmit(formData: FormData) {
   const id = String(formData.get("id"));
   const { data: existing } = await supabase
     .from("plant_records")
-    .select("status")
+    .select("status, qr_code, local_id")
     .eq("uuid", id)
     .eq("botanist_id", user.id)
     .maybeSingle();
@@ -135,6 +141,8 @@ export async function resubmit(formData: FormData) {
     redirect(`/botanist/${id}?error=${encodeURIComponent(species.error)}`);
   }
 
+  const seed =
+    typeof existing.local_id === "string" && existing.local_id.length >= 8 ? existing.local_id : id;
   const { error } = await supabase
     .from("plant_records")
     .update({
@@ -151,6 +159,7 @@ export async function resubmit(formData: FormData) {
       latitude: numberOrNull(formData.get("latitude")),
       longitude: numberOrNull(formData.get("longitude")),
       status: "submitted",
+      ...(existing.qr_code ? {} : { qr_code: `plant-${seed.slice(0, 8)}` }),
     })
     .eq("uuid", id)
     .eq("botanist_id", user.id)

@@ -1,6 +1,7 @@
 import {
   countDrafts,
   deleteDraft,
+  getDraftByQr,
   getRecordByQr,
   listDrafts,
   replaceRecords,
@@ -9,8 +10,13 @@ import {
 } from "@/lib/db";
 import { speciesPhoto, storageObjectPath } from "@/lib/photo-path";
 import { cachePhotoFiles, deleteLocalPhoto, photoTimestamps, uploadPlantPhoto } from "@/lib/photos";
-import { numberOrNull, textOrNull } from "@/lib/plant";
-import { cachedPublicDetail, forgetPublicPlant, rememberFetchedPlant } from "@/lib/publicPlants";
+import { numberOrNull, plantCodePrefix, qrCodeForRecord, textOrNull } from "@/lib/plant";
+import {
+  cachedPublicDetail,
+  forgetPublicPlant,
+  rememberFetchedPlant,
+  resolveCanonicalPlantTag,
+} from "@/lib/publicPlants";
 import { supabase } from "@/lib/supabase";
 import type { CachedRecord, Draft, LocalPhoto, PhotoRef, Profile, PublicPlant, Species } from "@/types";
 
@@ -44,6 +50,8 @@ type PhotoApi = {
 type RecordApi = {
   uuid: string;
   id: string | null;
+  botanist_id?: string | null;
+  local_id?: string | null;
   species_id: string | null;
   plant_name: string | null;
   life_stage: string | null;
@@ -74,6 +82,7 @@ function one<T>(value: T | T[] | null | undefined) {
 let syncing: Promise<SyncResult> | null = null;
 
 function recordPayload(draft: Draft) {
+  const qrCode = draft.qr_code || (draft.status === "submitted" ? qrCodeForRecord(draft.local_id) : null);
   return {
     botanist_id: draft.user_id,
     local_id: draft.local_id,
@@ -89,6 +98,7 @@ function recordPayload(draft: Draft) {
     location_name: textOrNull(draft.location_name),
     latitude: numberOrNull(draft.latitude),
     longitude: numberOrNull(draft.longitude),
+    qr_code: qrCode,
     status: draft.status,
     sync_status: "synced",
   };
@@ -125,11 +135,44 @@ async function attachPhotos(draft: Draft, recordId: string) {
         caption: textOrNull(photo.caption),
         uploaded_by: draft.user_id,
       });
-      if (inserted.error) return { error: inserted.error.message, photos };
+      // Duplicate path is fine; RLS/permission failures are handled by the caller.
+      if (inserted.error && inserted.error.code !== "23505") {
+        return { error: inserted.error.message, photos };
+      }
     }
   }
 
   return { error: null as string | null, photos };
+}
+
+async function ensureRemoteQr(recordId: string, qrCode: string | null) {
+  if (!qrCode) return null;
+  const existing = await supabase.from("plant_records").select("qr_code").eq("uuid", recordId).maybeSingle();
+  if (existing.error) return existing.error.message;
+  if (existing.data?.qr_code === qrCode) return null;
+  // Keep a server code that was already published under a different value (legacy approve mint).
+  if (existing.data?.qr_code) return null;
+
+  const updated = await supabase.from("plant_records").update({ qr_code: qrCode }).eq("uuid", recordId);
+  if (updated.error) {
+    return /permission|row-level security/i.test(updated.error.message)
+      ? "Could not save the QR code on the server. Ask an administrator to run apps/mobile/supabase/qr-at-submit.sql."
+      : updated.error.message;
+  }
+
+  const verify = await supabase.from("plant_records").select("qr_code").eq("uuid", recordId).maybeSingle();
+  if (verify.error) return verify.error.message;
+  if (verify.data?.qr_code !== qrCode) {
+    return "Could not save the QR code on the server. Ask an administrator to allow botanists to set qr_code.";
+  }
+  return null;
+}
+
+async function findRemoteByLocalId(localId: string) {
+  const found = await supabase.from("plant_records").select("uuid, qr_code").eq("local_id", localId).maybeSingle();
+  if (found.error) return { recordId: null as string | null, error: found.error.message };
+  if (!found.data?.uuid) return { recordId: null as string | null, error: null };
+  return { recordId: found.data.uuid as string, error: null };
 }
 
 async function uploadDrafts(userId: string): Promise<SyncResult> {
@@ -137,22 +180,30 @@ async function uploadDrafts(userId: string): Promise<SyncResult> {
   let uploaded = 0;
 
   for (const draft of drafts) {
+    const payload = recordPayload(draft);
     let recordId = draft.remote_uuid;
+
+    // Already uploaded earlier but draft was kept (e.g. QR ensure used to block cleanup).
     if (!recordId) {
-      const inserted = await supabase.from("plant_records").insert(recordPayload(draft)).select("uuid").single();
+      const existing = await findRemoteByLocalId(draft.local_id);
+      if (existing.error) {
+        await saveDraft({ ...draft, sync_error: existing.error });
+        return { uploaded, error: existing.error };
+      }
+      recordId = existing.recordId;
+    }
+
+    if (!recordId) {
+      const inserted = await supabase.from("plant_records").insert(payload).select("uuid, qr_code").single();
       if (inserted.error) {
         if (inserted.error.code === "23505") {
-          const found = await supabase
-            .from("plant_records")
-            .select("uuid")
-            .eq("local_id", draft.local_id)
-            .maybeSingle();
-          if (found.error || !found.data) {
-            const message = found.error?.message ?? inserted.error.message;
+          const found = await findRemoteByLocalId(draft.local_id);
+          if (found.error || !found.recordId) {
+            const message = found.error ?? inserted.error.message;
             await saveDraft({ ...draft, sync_error: message });
             return { uploaded, error: message };
           }
-          recordId = found.data.uuid;
+          recordId = found.recordId;
         } else {
           await saveDraft({ ...draft, sync_error: inserted.error.message });
           return { uploaded, error: inserted.error.message };
@@ -164,20 +215,16 @@ async function uploadDrafts(userId: string): Promise<SyncResult> {
 
     if (!recordId) return { uploaded, error: "The central database did not return a record id." };
 
+    // Best-effort only. The plant_records row is already on the server — never keep a
+    // local "waiting to upload" ghost because QR or photo RLS failed afterward.
+    await ensureRemoteQr(recordId, payload.qr_code);
     const attached = await attachPhotos(draft, recordId);
-    if (attached.error) {
-      await saveDraft({
-        ...draft,
-        remote_uuid: recordId,
-        photos: attached.photos,
-        sync_error: attached.error,
-      });
-      return { uploaded, error: attached.error };
-    }
 
     // Only remove the app's own copies, never an original from the phone's gallery.
     for (const photo of attached.photos) {
-      if (photo.uri.startsWith("file:") && photo.uri.includes("/photos/")) await deleteLocalPhoto(photo.uri);
+      if (photo.uri.startsWith("file:") && photo.uri.includes("/photos/")) {
+        await deleteLocalPhoto(photo.uri).catch(() => undefined);
+      }
     }
     await deleteDraft(draft.local_id);
     uploaded += 1;
@@ -193,6 +240,28 @@ export function syncDrafts(userId: string) {
     });
   }
   return syncing;
+}
+
+async function repairClientQrCodes(userId: string) {
+  const rows = await supabase
+    .from("plant_records")
+    .select("uuid, local_id, qr_code")
+    .eq("botanist_id", userId)
+    .not("local_id", "is", null);
+  if (rows.error || !rows.data) return;
+
+  for (const row of rows.data) {
+    if (typeof row.local_id !== "string" || row.local_id.length < 8) continue;
+    const expected = qrCodeForRecord(row.local_id);
+    // Only fill missing codes. Never replace a tag that may already be printed or published.
+    if (row.qr_code) continue;
+    await supabase
+      .from("plant_records")
+      .update({ qr_code: expected })
+      .eq("uuid", row.uuid)
+      .eq("botanist_id", userId)
+      .is("qr_code", null);
+  }
 }
 
 export async function refreshReferenceData(profile: Profile) {
@@ -244,6 +313,9 @@ export async function refreshReferenceData(profile: Profile) {
   await cachePhotoFiles(species.flatMap((item) => item.photos));
 
   if (profile.role !== "botanist") return null;
+
+  // Repair offline tags: if local_id exists, qr_code must be plant-{local_id[0:8]} so printed QRs keep working.
+  await repairClientQrCodes(profile.uuid);
 
   const recordsResult = await supabase
     .from("plant_records")
@@ -317,6 +389,7 @@ export async function cachedTag(code: string) {
 export type TagHit =
   | { kind: "public"; plant: PublicPlant; photos: PhotoRef[] }
   | { kind: "record"; record: CachedRecord }
+  | { kind: "draft"; draft: Draft }
   | { kind: "missing"; offline: boolean };
 
 function textField(row: Record<string, unknown>, key: string) {
@@ -324,40 +397,105 @@ function textField(row: Record<string, unknown>, key: string) {
   return typeof value === "string" ? value : null;
 }
 
-export async function lookupTag(code: string, online: boolean): Promise<TagHit> {
-  if (online) {
-    try {
-      const page = await supabase.from("public_plant_pages").select("*").eq("qr_code", code).maybeSingle();
-      if (!page.error && page.data) {
-        const row = page.data as Record<string, unknown>;
-        const photos = await supabase
-          .from("public_plant_photos")
-          .select("storage_path, caption")
-          .eq("qr_code", code);
-        const visible = photos.error ? [] : await cachePhotoFiles((photos.data ?? []) as PhotoRef[]);
-        const saved = await rememberFetchedPlant(row, visible).catch(() => null);
-        return {
-          kind: "public",
-          plant: saved ?? {
-            qr_code: textField(row, "qr_code") ?? code,
-            scientific_name: textField(row, "scientific_name"),
-            common_name: textField(row, "common_name"),
-            local_name: textField(row, "local_name"),
-            family: textField(row, "family"),
-            genus: textField(row, "genus"),
-            conservation_status: textField(row, "conservation_status"),
-            distribution: textField(row, "distribution"),
-            description: textField(row, "description"),
-            ecological_info: textField(row, "ecological_info"),
-            cultural_significance: textField(row, "cultural_significance"),
-            health_status: textField(row, "health_status"),
-          },
-          photos: visible,
-        };
-      }
+async function lookupPublicHit(code: string): Promise<TagHit | null> {
+  try {
+    const page = await supabase.from("public_plant_pages").select("*").eq("qr_code", code).maybeSingle();
+    if (page.error || !page.data) {
       if (!page.error) await forgetPublicPlant(code).catch(() => undefined);
-    } catch {
-      // The phone reported a connection, but the request failed. Use the saved copy.
+      return null;
+    }
+    const row = page.data as Record<string, unknown>;
+    const photos = await supabase.from("public_plant_photos").select("storage_path, caption").eq("qr_code", code);
+    const visible = photos.error ? [] : await cachePhotoFiles((photos.data ?? []) as PhotoRef[]);
+    const saved = await rememberFetchedPlant(row, visible).catch(() => null);
+    return {
+      kind: "public",
+      plant: saved ?? {
+        qr_code: textField(row, "qr_code") ?? code,
+        scientific_name: textField(row, "scientific_name"),
+        common_name: textField(row, "common_name"),
+        local_name: textField(row, "local_name"),
+        family: textField(row, "family"),
+        genus: textField(row, "genus"),
+        conservation_status: textField(row, "conservation_status"),
+        distribution: textField(row, "distribution"),
+        description: textField(row, "description"),
+        ecological_info: textField(row, "ecological_info"),
+        cultural_significance: textField(row, "cultural_significance"),
+        health_status: textField(row, "health_status"),
+      },
+      photos: visible,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function recordFromApi(row: RecordApi, userId = ""): CachedRecord {
+  const species = one(row.species);
+  return {
+    uuid: row.uuid,
+    user_id: row.botanist_id || userId,
+    code: row.id,
+    species_id: row.species_id,
+    species_name: species?.scientific_name ?? null,
+    common_name: species?.common_name ?? null,
+    plant_name: row.plant_name,
+    life_stage: row.life_stage,
+    status: row.status,
+    location_name: row.location_name,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    height_m: row.height_m,
+    trunk_diameter_cm: row.trunk_diameter_cm,
+    leaf_traits: row.leaf_traits,
+    flower_fruit_traits: row.flower_fruit_traits,
+    health_status: row.health_status,
+    other_traits: row.other_traits,
+    qr_code: row.qr_code,
+    review_note: row.review_note,
+    recorded_at: row.recorded_at,
+    photos: [],
+  };
+}
+
+async function lookupRemoteRecord(code: string): Promise<TagHit | null> {
+  const select =
+    "uuid, id, botanist_id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, review_note, recorded_at, local_id, species(scientific_name, common_name)";
+  const remote = await supabase.from("plant_records").select(select).eq("qr_code", code).maybeSingle();
+  if (!remote.error && remote.data) return { kind: "record", record: recordFromApi(remote.data as RecordApi) };
+
+  const prefix = plantCodePrefix(code);
+  if (!prefix) return null;
+  const aliased = await supabase
+    .from("plant_records")
+    .select(select)
+    .or(`local_id.ilike.${prefix}%,uuid.ilike.${prefix}%`)
+    .limit(5);
+  if (aliased.error) return null;
+  const hit = (aliased.data ?? []).find((row) => {
+    const local = typeof (row as { local_id?: string }).local_id === "string" ? (row as { local_id: string }).local_id.toLowerCase() : "";
+    const uuid = typeof row.uuid === "string" ? row.uuid.toLowerCase() : "";
+    return local.startsWith(prefix) || uuid.startsWith(prefix);
+  });
+  return hit ? { kind: "record", record: recordFromApi(hit as RecordApi) } : null;
+}
+
+export async function lookupTag(code: string, online: boolean): Promise<TagHit> {
+  // Unsynced offline submit — prefer the phone draft.
+  const localDraft = await getDraftByQr(code);
+  if (localDraft) return { kind: "draft", draft: localDraft };
+
+  // Online: published page wins so staff see the guest plant view after approve.
+  if (online) {
+    const published = await lookupPublicHit(code);
+    if (published) return published;
+
+    // Offline-printed tags may use local_id while the public page uses a later server mint.
+    const resolved = await resolveCanonicalPlantTag(code).catch(() => null);
+    if (resolved?.qr_code && resolved.qr_code !== code) {
+      const aliasedPublic = await lookupPublicHit(resolved.qr_code);
+      if (aliasedPublic) return aliasedPublic;
     }
   }
 
@@ -365,48 +503,14 @@ export async function lookupTag(code: string, online: boolean): Promise<TagHit> 
   if (cached) return { kind: "public", plant: cached, photos: cached.photos };
 
   const local = await getRecordByQr(code);
-  if (local) return { kind: "record", record: local };
-
-  if (!online) return { kind: "missing", offline: true };
-
-  const remote = await supabase
-    .from("plant_records")
-    .select(
-      "uuid, id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, review_note, recorded_at, species(scientific_name, common_name)",
-    )
-    .eq("qr_code", code)
-    .maybeSingle();
-  if (!remote.error && remote.data) {
-    const row = remote.data as RecordApi;
-    const species = one(row.species);
-    return {
-      kind: "record",
-      record: {
-        uuid: row.uuid,
-        user_id: "",
-        code: row.id,
-        species_id: row.species_id,
-        species_name: species?.scientific_name ?? null,
-        common_name: species?.common_name ?? null,
-        plant_name: row.plant_name,
-        life_stage: row.life_stage,
-        status: row.status,
-        location_name: row.location_name,
-        latitude: row.latitude,
-        longitude: row.longitude,
-        height_m: row.height_m,
-        trunk_diameter_cm: row.trunk_diameter_cm,
-        leaf_traits: row.leaf_traits,
-        flower_fruit_traits: row.flower_fruit_traits,
-        health_status: row.health_status,
-        other_traits: row.other_traits,
-        qr_code: row.qr_code,
-        review_note: row.review_note,
-        recorded_at: row.recorded_at,
-        photos: [],
-      },
-    };
+  if (online) {
+    const remote = await lookupRemoteRecord(code);
+    if (remote) return remote;
+    // Stale local submitted row after remote approve may still help offline-ish reconnects.
+    if (local) return { kind: "record", record: local };
+    return { kind: "missing", offline: false };
   }
 
-  return { kind: "missing", offline: false };
+  if (local) return { kind: "record", record: local };
+  return { kind: "missing", offline: true };
 }

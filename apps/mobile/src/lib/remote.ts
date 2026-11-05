@@ -1,7 +1,7 @@
 import { storageObjectPath } from "@/lib/photo-path";
 import { uploadPlantPhoto } from "@/lib/photos";
 import { numberOrNull, qrCodeForRecord, textOrNull } from "@/lib/plant";
-import { photoBucket, siteUrl, supabase } from "@/lib/supabase";
+import { photoBucket, supabase } from "@/lib/supabase";
 import type { FieldInput } from "@/types";
 
 export async function resubmitRecord(
@@ -21,7 +21,7 @@ export async function resubmitRecord(
   // instead of asking the update to return the row.
   const { data: current, error: readError } = await supabase
     .from("plant_records")
-    .select("status")
+    .select("status, qr_code, local_id")
     .eq("uuid", recordId)
     .eq("botanist_id", userId)
     .maybeSingle();
@@ -29,6 +29,14 @@ export async function resubmitRecord(
   if (!current || !["draft", "needs_revision", "rejected"].includes(current.status)) {
     return "This record can no longer be edited. Pull down to refresh.";
   }
+
+  // Never overwrite an existing tag. Prefer local_id so offline-printed codes stay stable.
+  const assignQr =
+    !options.keepStatus && !current.qr_code
+      ? qrCodeForRecord(
+          typeof current.local_id === "string" && current.local_id.length >= 8 ? current.local_id : recordId,
+        )
+      : null;
 
   // keepStatus saves the edits without sending the record for review.
   const { error } = await supabase
@@ -47,6 +55,7 @@ export async function resubmitRecord(
       latitude: numberOrNull(input.latitude),
       longitude: numberOrNull(input.longitude),
       ...(options.keepStatus ? {} : { status: "submitted" }),
+      ...(assignQr ? { qr_code: assignQr } : {}),
     })
     .eq("uuid", recordId)
     .eq("botanist_id", userId)
@@ -72,33 +81,25 @@ export async function resubmitRecord(
 }
 
 export async function generateRecordQr(recordId: string) {
-  const code = qrCodeForRecord(recordId);
-  const { error } = await supabase.from("plant_records").update({ qr_code: code }).eq("uuid", recordId);
+  const { data: current, error: readError } = await supabase
+    .from("plant_records")
+    .select("qr_code, local_id")
+    .eq("uuid", recordId)
+    .maybeSingle();
+  if (readError) return { code: null, error: readError.message };
+  if (!current) return { code: null, error: "This record was not found." };
+  if (current.qr_code) return { code: current.qr_code, error: null };
+
+  const code = qrCodeForRecord(
+    typeof current.local_id === "string" && current.local_id.length >= 8 ? current.local_id : recordId,
+  );
+  const { error } = await supabase
+    .from("plant_records")
+    .update({ qr_code: code })
+    .eq("uuid", recordId)
+    .is("qr_code", null);
   if (error) return { code: null, error: error.message };
   return { code, error: null };
-}
-
-export async function printPlantQr(qrCode: string) {
-  if (!siteUrl) return "Set EXPO_PUBLIC_SITE_URL to the website address before printing.";
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) return "Sign in again before printing.";
-
-  try {
-    const response = await fetch(`${siteUrl}/api/print/plant-qr`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ qrCode }),
-    });
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    if (!response.ok) return body?.error || "printer";
-    return null;
-  } catch {
-    return "printer";
-  }
 }
 
 function friendlyError(message: string) {

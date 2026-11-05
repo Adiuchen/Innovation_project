@@ -3,11 +3,11 @@ import { StyleSheet, View } from "react-native";
 import { Button, Notice } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { usePreferences } from "@/lib/preferences";
-import { printPlantQr } from "@/lib/remote";
+import { parsePrinterHost, printPlantQrLocal, printerPort } from "@/lib/printer";
 
-export function PrintQrButton({ qrCode }: { qrCode: string }) {
-  const { profile, online } = useAuth();
-  const { t } = usePreferences();
+export function PrintQrButton({ qrCode, label }: { qrCode: string; label?: string | null }) {
+  const { profile } = useAuth();
+  const { printerIp, printerPort: portText, t } = usePreferences();
   const [printing, setPrinting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -20,15 +20,16 @@ export function PrintQrButton({ qrCode }: { qrCode: string }) {
         label={printing ? t.printingQr : t.printQr}
         disabled={printing}
         onPress={async () => {
-          if (!online) {
+          const host = parsePrinterHost(printerIp);
+          if (!host) {
             setFailed(true);
-            setMessage(t.printQrOffline);
+            setMessage(t.printerIpRequired);
             return;
           }
           setPrinting(true);
           setFailed(false);
           setMessage(null);
-          const error = await printPlantQr(qrCode);
+          const error = await printPlantQrLocal(qrCode, { host, port: printerPort(portText) }, label);
           setPrinting(false);
           setFailed(Boolean(error));
           setMessage(!error ? t.qrPrinted : error === "printer" ? t.qrPrintFailed : error);
