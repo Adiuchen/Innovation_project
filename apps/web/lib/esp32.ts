@@ -24,7 +24,7 @@ export type Esp32Event = {
   distance_cm: number | null;
 };
 
-const ALERT_EVENTS: Esp32EventName[] = ["plant_stolen", "plant_disturbed", "rain_started"];
+const ALERT_EVENTS: Esp32EventName[] = ["plant_stolen", "plant_disturbed", "rain_started", "rain_stopped"];
 const OFFLINE_AFTER_MS = 15 * 60 * 1000;
 const PARK_ZONE = "Asia/Kuala_Lumpur";
 const DAY_MS = 24 * 60 * 60 * 1000;

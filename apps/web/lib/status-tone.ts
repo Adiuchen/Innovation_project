@@ -24,6 +24,7 @@ const tones: Record<string, string> = {
   arming: "bg-amber-100 text-amber-900",
   unarmed: "bg-neutral-100 text-neutral-700",
   rain_started: "bg-sky-100 text-sky-900",
+  rain_stopped: "bg-slate-100 text-slate-800",
   plant_disturbed: "bg-orange-100 text-orange-900",
   plant_stolen: "bg-red-100 text-red-800",
 };

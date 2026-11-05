@@ -352,6 +352,7 @@ const en = {
   plantArming: "Arming",
   plantUnarmed: "Unarmed",
   rainStarted: "Rain started",
+  rainStopped: "Rain stopped",
 };
 
 const ms: { [K in keyof typeof en]: string } = {
@@ -704,6 +705,7 @@ const ms: { [K in keyof typeof en]: string } = {
   plantArming: "Sedang bersedia",
   plantUnarmed: "Tidak bersedia",
   rainStarted: "Hujan bermula",
+  rainStopped: "Hujan berhenti",
 };
 
 export type Copy = typeof en;
@@ -741,6 +743,7 @@ const statusKeys: Record<string, keyof Copy> = {
   arming: "plantArming",
   unarmed: "plantUnarmed",
   rain_started: "rainStarted",
+  rain_stopped: "rainStopped",
   plant_disturbed: "plantDisturbed",
   plant_stolen: "plantStolen",
 };

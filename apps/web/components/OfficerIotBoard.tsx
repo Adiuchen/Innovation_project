@@ -22,6 +22,7 @@ const statusLabels: Record<string, keyof Copy> = {
   arming: "plantArming",
   unarmed: "plantUnarmed",
   rain_started: "rainStarted",
+  rain_stopped: "rainStopped",
   plant_disturbed: "plantDisturbed",
   plant_stolen: "plantStolen",
 };
