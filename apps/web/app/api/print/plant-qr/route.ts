@@ -70,17 +70,26 @@ export async function POST(request: Request) {
     .eq("qr_code", qrCode)
     .maybeSingle();
 
-  if (!plant?.qr_code) {
-    return NextResponse.json({ error: "That plant does not have a QR code." }, { status: 404 });
+  let labelSource = plant;
+  if (!labelSource?.qr_code) {
+    const { data: record } = await supabase
+      .from("plant_records")
+      .select("qr_code, id, plant_name")
+      .eq("qr_code", qrCode)
+      .maybeSingle();
+    if (!record?.qr_code) {
+      return NextResponse.json({ error: "That plant does not have a QR code." }, { status: 404 });
+    }
+    labelSource = { qr_code: record.qr_code, plant_id: record.id, plant_name: record.plant_name };
   }
 
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost:3000";
   const proto = request.headers.get("x-forwarded-proto") ?? "http";
-  const label = String(plant.plant_id || plant.plant_name || plant.qr_code).slice(0, 32);
+  const label = String(labelSource.plant_id || labelSource.plant_name || labelSource.qr_code).slice(0, 32);
 
   try {
     await printPlantQr({
-      url: `${proto}://${reachableHost(host)}/p/${plant.qr_code}`,
+      url: `${proto}://${reachableHost(host)}/p/${labelSource.qr_code}`,
       label,
     });
     return NextResponse.json({ ok: true });

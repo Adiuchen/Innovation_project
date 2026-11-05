@@ -31,7 +31,7 @@ export async function reviewRecord(formData: FormData) {
 
   const { data: record } = await supabase
     .from("plant_records")
-    .select("status, qr_code")
+    .select("status, qr_code, local_id")
     .eq("uuid", id)
     .maybeSingle();
   if (!record || (record.status !== "submitted" && record.status !== "needs_revision")) {
@@ -39,12 +39,20 @@ export async function reviewRecord(formData: FormData) {
     redirect(`${destination}${joiner}error=${encodeURIComponent("This record is not waiting for review.")}`);
   }
 
+  // Keep a client-assigned qr_code. Prefer local_id (offline print) over server uuid mint.
+  const qrCode =
+    record.qr_code ||
+    (typeof record.local_id === "string" && record.local_id.length >= 8
+      ? `plant-${record.local_id.slice(0, 8)}`
+      : null) ||
+    (status === "approved" ? `plant-${id.slice(0, 8)}` : record.qr_code);
+
   const { error } = await supabase
     .from("plant_records")
     .update({
       status,
       review_note: textOrNull(formData.get("review_note")),
-      qr_code: status === "approved" && !record.qr_code ? `plant-${id.slice(0, 8)}` : record.qr_code,
+      qr_code: qrCode,
     })
     .eq("uuid", id)
     .in("status", ["submitted", "needs_revision"]);

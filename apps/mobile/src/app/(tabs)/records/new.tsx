@@ -5,6 +5,7 @@ import { RecordForm } from "@/components/RecordForm";
 import { saveDraft } from "@/lib/db";
 import { newId } from "@/lib/id";
 import { useAuth } from "@/lib/auth";
+import { qrCodeForRecord } from "@/lib/plant";
 import type { FieldInput } from "@/types";
 
 export default function NewRecordScreen() {
@@ -32,6 +33,7 @@ export default function NewRecordScreen() {
         mode="create"
         submitLabel="Save record"
         onSubmit={async (input: FieldInput) => {
+          const qr_code = input.status === "submitted" ? qrCodeForRecord(localId) : null;
           try {
             await saveDraft({
               ...input,
@@ -39,6 +41,7 @@ export default function NewRecordScreen() {
               user_id: profile.uuid,
               remote_uuid: null,
               photo_remote_url: null,
+              qr_code,
               sync_error: null,
               saved_at: new Date().toISOString(),
             });
@@ -47,7 +50,14 @@ export default function NewRecordScreen() {
           }
           if (online) await syncNow();
           else await refreshCount();
-          router.replace("/records");
+          if (qr_code) {
+            // Replace the form with the draft detail so Back returns to the records list underneath.
+            router.replace(`/records/draft/${localId}`);
+          } else if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace("/records");
+          }
           return null;
         }}
       />

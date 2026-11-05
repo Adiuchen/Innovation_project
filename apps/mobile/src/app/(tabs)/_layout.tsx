@@ -19,6 +19,8 @@ export default function TabLayout() {
   const { palette, t } = usePreferences();
   return (
     <Tabs
+      // Match unstable_settings.anchor ("field") so Android/system back reaches Home instead of a dead GO_BACK.
+      backBehavior="initialRoute"
       screenOptions={{
         // The sync bar sits where a header would, so it handles the top safe area for every tab.
         headerShown: true,

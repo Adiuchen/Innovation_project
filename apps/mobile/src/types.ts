@@ -60,6 +60,8 @@ export type Draft = {
   photo_remote_url: string | null;
   /** Every photo. Drafts loaded from the phone always have it; older code may leave it out. */
   photos?: LocalPhoto[];
+  /** Assigned on submit from local_id; synced unchanged to the server. */
+  qr_code: string | null;
   status: "draft" | "submitted";
   saved_at: string;
   sync_error: string | null;

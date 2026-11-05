@@ -8,7 +8,7 @@ export default function PlantsLayout() {
   return (
     <Stack screenOptions={headerOptions}>
       <Stack.Screen name="index" options={{ title: t.viewPlants, headerLeft: () => <HeaderExit /> }} />
-      <Stack.Screen name="[id]" options={{ title: t.viewPlants, headerLeft: () => <HeaderExit mode="back" /> }} />
+      <Stack.Screen name="[id]" options={{ title: t.viewPlants, headerLeft: () => <HeaderExit fallback="/plants" /> }} />
     </Stack>
   );
 }

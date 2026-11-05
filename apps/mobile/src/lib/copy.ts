@@ -106,6 +106,11 @@ const en = {
   qrPrinted: "QR sent to the printer.",
   qrPrintFailed: "The printer did not print. Check that it is on and on this network.",
   printQrOffline: "Connect to the network before printing.",
+  printerIp: "Printer IP",
+  printerPort: "Printer port",
+  printerIpHint: "LAN or hotspot address of the ESC/POS printer (port 9100 by default).",
+  printerIpRequired: "Set the printer IP in Settings before printing.",
+  printerHeading: "Field printer",
 };
 
 const zh: typeof en = {
@@ -214,6 +219,11 @@ const zh: typeof en = {
   qrPrinted: "二维码已发送到打印机。",
   qrPrintFailed: "打印机没有打印。请确认它已开机并在同一网络。",
   printQrOffline: "请先连接网络再打印。",
+  printerIp: "打印机 IP",
+  printerPort: "打印机端口",
+  printerIpHint: "局域网或热点上 ESC/POS 打印机的地址（默认端口 9100）。",
+  printerIpRequired: "请先在设置中填写打印机 IP，再打印。",
+  printerHeading: "现场打印机",
 };
 
 const ms: typeof en = {
@@ -322,6 +332,11 @@ const ms: typeof en = {
   qrPrinted: "Kod QR dihantar ke pencetak.",
   qrPrintFailed: "Pencetak tidak mencetak. Pastikan ia dihidupkan dan berada pada rangkaian ini.",
   printQrOffline: "Sambung ke rangkaian sebelum mencetak.",
+  printerIp: "IP pencetak",
+  printerPort: "Port pencetak",
+  printerIpHint: "Alamat LAN atau hotspot pencetak ESC/POS (port 9100 secara lalai).",
+  printerIpRequired: "Tetapkan IP pencetak dalam Tetapan sebelum mencetak.",
+  printerHeading: "Pencetak lapangan",
 };
 
 const copies = { en, zh, ms };

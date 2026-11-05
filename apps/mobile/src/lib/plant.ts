@@ -26,6 +26,12 @@ export function qrCodeForRecord(uuid: string) {
   return `plant-${uuid.slice(0, 8)}`;
 }
 
+/** First 8 hex chars from a `plant-xxxxxxxx` tag, used to match local_id / server uuid. */
+export function plantCodePrefix(code: string) {
+  const match = /^plant-([0-9a-f]{8})$/i.exec(code.trim());
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
 export function plantQrValue(code: string, siteUrl: string) {
   const site = siteUrl.replace(/\/$/, "");
   return site ? `${site}/p/${code}` : code;

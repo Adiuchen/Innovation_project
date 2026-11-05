@@ -6,7 +6,7 @@ export default function SpeciesLayout() {
   return (
     <Stack screenOptions={headerOptions}>
       <Stack.Screen name="index" options={{ title: "Species guide", headerLeft: () => <HeaderExit /> }} />
-      <Stack.Screen name="[id]" options={{ title: "Species", headerLeft: () => <HeaderExit mode="back" /> }} />
+      <Stack.Screen name="[id]" options={{ title: "Species", headerLeft: () => <HeaderExit fallback="/species" /> }} />
     </Stack>
   );
 }
