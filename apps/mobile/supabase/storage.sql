@@ -1,6 +1,9 @@
 -- Run in the Supabase SQL editor.
 -- The mobile app signs in with the publishable anon key only.
 -- Do not put the service-role key in the app.
+--
+-- This file covers storage.objects for the plant-photos bucket only.
+-- For the plant_photos table RLS (metadata rows), also run plant-photos.sql.
 
 insert into storage.buckets (id, name, public)
 values ('plant-photos', 'plant-photos', true)
