@@ -123,18 +123,29 @@ export async function deleteRemoteDraft(userId: string, recordId: string) {
   if (readError) return deleteError(readError.message);
   if (!current || current.status !== "draft") return "Only drafts can be deleted.";
 
+  // Capture paths first so storage cleanup can run after the row is gone.
   const { data: photos } = await supabase.from("plant_photos").select("storage_path").eq("plant_record_id", recordId);
 
-  const photoDelete = await supabase.from("plant_photos").delete().eq("plant_record_id", recordId);
-  if (photoDelete.error) return deleteError(photoDelete.error.message);
+  // Prefer the security-definer RPC: plain table DELETE often fails when the
+  // authenticated role has no DELETE grant, even after RLS policies exist.
+  const rpc = await supabase.rpc("delete_own_draft", { p_record_id: recordId });
+  if (rpc.error) {
+    if (!/could not find the function|schema cache|does not exist/i.test(rpc.error.message)) {
+      return deleteError(rpc.error.message);
+    }
 
-  const { error } = await supabase
-    .from("plant_records")
-    .delete()
-    .eq("uuid", recordId)
-    .eq("botanist_id", userId)
-    .eq("status", "draft");
-  if (error) return deleteError(error.message);
+    // Older databases that only have the table policies / grants.
+    const photoDelete = await supabase.from("plant_photos").delete().eq("plant_record_id", recordId);
+    if (photoDelete.error) return deleteError(photoDelete.error.message);
+
+    const { error } = await supabase
+      .from("plant_records")
+      .delete()
+      .eq("uuid", recordId)
+      .eq("botanist_id", userId)
+      .eq("status", "draft");
+    if (error) return deleteError(error.message);
+  }
 
   // Best effort: an image file left behind does not bring the draft back.
   const paths = (photos ?? [])
@@ -145,7 +156,11 @@ export async function deleteRemoteDraft(userId: string, recordId: string) {
 }
 
 function deleteError(message: string) {
-  return /permission denied|row-level security/i.test(message)
-    ? "The database does not allow deleting drafts yet. Ask the administrator to run supabase/delete-drafts.sql."
-    : message;
+  if (/could not find the function|schema cache|does not exist/i.test(message)) {
+    return "The database is missing delete_own_draft. Ask the administrator to run the full supabase/delete-drafts.sql script.";
+  }
+  if (/permission denied|row-level security/i.test(message)) {
+    return "The database still blocks deleting drafts. Ask the administrator to re-run the full supabase/delete-drafts.sql script (grants + delete_own_draft function), then try again.";
+  }
+  return message;
 }

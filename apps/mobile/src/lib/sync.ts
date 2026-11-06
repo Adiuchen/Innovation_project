@@ -137,7 +137,10 @@ async function attachPhotos(draft: Draft, recordId: string) {
       });
       // Duplicate path is fine; RLS/permission failures are handled by the caller.
       if (inserted.error && inserted.error.code !== "23505") {
-        return { error: inserted.error.message, photos };
+        const message = /row-level security/i.test(inserted.error.message)
+          ? 'Could not save the photograph. Ask an administrator to run apps/mobile/supabase/plant-photos.sql.'
+          : inserted.error.message;
+        return { error: message, photos };
       }
     }
   }
