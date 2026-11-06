@@ -29,4 +29,8 @@ Other active staff can sign in to search species and scan tags. Only botanists c
 
 There is no storage bucket in the project yet. Run `supabase/storage.sql` in the Supabase SQL editor before field photographs can upload. Until then, the record and its photo remain on the phone and the app explains why the upload stopped.
 
+## Deleting drafts
+
+Uploaded drafts stay in Supabase until a botanist deletes them. Run the **entire** `supabase/delete-drafts.sql` in the Supabase SQL editor (nothing selected, then Run). That script grants DELETE, adds RLS policies, and creates the `delete_own_draft` RPC the app calls. Without it, Delete draft shows a permission error.
+
 The service-role key is not used.
