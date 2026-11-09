@@ -6,20 +6,24 @@ import { PhotoGallery } from "@/components/PhotoGallery";
 import { PrintQrButton } from "@/components/PrintQrButton";
 import { Badge, Button, Fact, Notice, Screen } from "@/components/ui";
 import { RecordForm } from "@/components/RecordForm";
-import { getRecord } from "@/lib/db";
+import { getRecord, getSpecies } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
+import type { Copy, Locale } from "@/lib/copy";
+import { usePreferences } from "@/lib/preferences";
 import { choiceLabel, firstParam, flowerChoices, formatWhen, healthChoices, leafChoices, lifeStageChoices, plantQrValue, recordName } from "@/lib/plant";
 import { deleteRemoteDraft, generateRecordQr, resubmitRecord } from "@/lib/remote";
 import { refreshReferenceData } from "@/lib/sync";
 import { siteUrl } from "@/lib/supabase";
 import { colors } from "@/theme";
-import type { CachedRecord, FieldInput } from "@/types";
+import type { CachedRecord, FieldInput, Species } from "@/types";
 
 export default function RecordDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const recordId = firstParam(id);
   const { profile, online, syncNow } = useAuth();
+  const { locale, t } = usePreferences();
   const [record, setRecord] = useState<CachedRecord | null>(null);
+  const [species, setSpecies] = useState<Species | null>(null);
   const [missing, setMissing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -34,6 +38,7 @@ export default function RecordDetailScreen() {
       row = await getRecord(recordId);
     }
     setRecord(row);
+    setSpecies(row?.species_id ? await getSpecies(row.species_id) : null);
     setMissing(!row);
   }, [online, profile, recordId]);
 
@@ -121,7 +126,7 @@ export default function RecordDetailScreen() {
           }}
         />
       ) : (
-        <SubmittedRecord record={record} />
+        <SubmittedRecord record={record} species={species} locale={locale} t={t} />
       )}
 
       {record.status === "draft" && profile.role === "botanist" && (
@@ -205,12 +210,27 @@ export default function RecordDetailScreen() {
   );
 }
 
-function SubmittedRecord({ record }: { record: CachedRecord }) {
+function SubmittedRecord({
+  record,
+  species,
+  locale,
+  t,
+}: {
+  record: CachedRecord;
+  species: Species | null;
+  locale: Locale;
+  t: Copy;
+}) {
   const lifeStage = choiceLabel(record.life_stage, lifeStageChoices);
   const health = choiceLabel(record.health_status, healthChoices);
   const leaves = choiceLabel(record.leaf_traits, leafChoices);
   const flower = choiceLabel(record.flower_fruit_traits, flowerChoices);
-  const gps = record.latitude != null && record.longitude != null ? `${record.latitude}, ${record.longitude}` : null;
+  const coordinates = formatCoordinates(record.latitude, record.longitude);
+  const recorded = formatRecorded(record.recorded_at, locale);
+  const mapUrl =
+    record.latitude != null && record.longitude != null
+      ? `https://www.openstreetmap.org/?mlat=${record.latitude}&mlon=${record.longitude}#map=17/${record.latitude}/${record.longitude}`
+      : null;
 
   return (
     <View style={styles.summary}>
@@ -227,63 +247,61 @@ function SubmittedRecord({ record }: { record: CachedRecord }) {
         {health ? <Text style={styles.pill}>{health}</Text> : null}
       </View>
       <View style={styles.card}>
-        <Text style={styles.section}>Record</Text>
-        <Line label="Code" value={record.code} />
-        <Line label="Recorded" value={record.recorded_at ? formatWhen(record.recorded_at) : null} />
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.section}>Place</Text>
-        <Line label="Name" value={record.location_name} />
-        <Line label="GPS" value={gps} />
-        {gps ? (
-          <Button
-            label="Open location"
-            tone="secondary"
-            onPress={() =>
-              Linking.openURL(
-                `https://www.openstreetmap.org/?mlat=${record.latitude}&mlon=${record.longitude}#map=17/${record.latitude}/${record.longitude}`,
-              )
-            }
-          />
-        ) : null}
-      </View>
-      <View style={styles.metrics}>
-        <Metric label="Height" value={record.height_m != null ? `${record.height_m} m` : "—"} />
-        <Metric label="Trunk" value={record.trunk_diameter_cm != null ? `${record.trunk_diameter_cm} cm` : "—"} />
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.section}>Traits</Text>
+        <Text style={styles.section}>{t.classification}</Text>
+        <Line label={t.family} value={species?.family} />
+        <Line label={t.genus} value={species?.genus} />
+        <Line label={t.scientificName} value={record.species_name} italic />
+        <Line label={t.conservationStatus} value={species?.conservation_status} />
+        <Text style={styles.section}>{t.thisSpecimen}</Text>
+        <Line label={t.plantName} value={record.plant_name} />
+        <Line label={t.plantId} value={record.code} />
+        <Line label={t.lifeStage} value={lifeStage} />
+        <Line label={t.place} value={record.location_name} />
+        <Line label={t.coordinates} value={coordinates} />
+        <Line label={t.height} value={record.height_m != null ? `${record.height_m} m` : null} />
+        <Line label="Trunk (cm)" value={record.trunk_diameter_cm != null ? `${record.trunk_diameter_cm} cm` : null} />
+        <Line label={t.condition} value={health} />
         <Line label="Leaves" value={leaves} />
         <Line label="Flower or fruit" value={flower} />
         <Line label="Other" value={record.other_traits} />
+        <Line label={t.recorded} value={recorded} />
+        {mapUrl ? <Button label="Open location" tone="secondary" onPress={() => Linking.openURL(mapUrl)} /> : null}
       </View>
     </View>
   );
 }
 
-function Line({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
+function Line({ label, value, italic = false }: { label: string; value: string | null | undefined; italic?: boolean }) {
   return (
     <View style={styles.line}>
       <Text style={styles.lineLabel}>{label}</Text>
-      <Text style={styles.lineValue}>{value}</Text>
+      <Text style={[styles.lineValue, italic && value ? styles.italic : null]}>{value || "—"}</Text>
     </View>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
+function formatCoordinates(latitude: number | null, longitude: number | null) {
+  if (latitude == null || longitude == null) return null;
+  const north = latitude >= 0 ? "N" : "S";
+  const east = longitude >= 0 ? "E" : "W";
+  return `${Math.abs(latitude).toFixed(4)}° ${north}, ${Math.abs(longitude).toFixed(4)}° ${east}`;
+}
+
+function formatRecorded(value: string | null, locale: Locale) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(locale === "ms" ? "ms-MY" : locale === "zh" ? "zh-CN" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 const styles = StyleSheet.create({
-  name: { fontSize: 32, fontWeight: "700", color: colors.ink },
-  species: { color: colors.muted, fontSize: 16, fontStyle: "italic" },
-  common: { color: colors.ink, fontSize: 16 },
+  name: { fontSize: 32, lineHeight: 40, fontWeight: "700", color: colors.ink },
+  species: { color: colors.muted, fontSize: 16, lineHeight: 22, fontStyle: "italic" },
+  common: { color: colors.ink, fontSize: 16, lineHeight: 22 },
   meta: { color: colors.muted, fontSize: 14 },
   summary: { gap: 12 },
   heroEmpty: {
@@ -306,13 +324,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   card: { backgroundColor: "#fffcf8", borderRadius: 24, padding: 16, gap: 12 },
-  section: { color: colors.ink, fontSize: 18, fontWeight: "700" },
+  section: { color: colors.ink, fontSize: 18, lineHeight: 24, fontWeight: "700" },
   line: { gap: 2, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#e7eee6" },
-  lineLabel: { color: "#6b726c", fontSize: 13 },
-  lineValue: { color: colors.ink, fontSize: 16 },
-  metrics: { flexDirection: "row", gap: 10 },
-  metric: { flex: 1, backgroundColor: "#143528", borderRadius: 24, padding: 16, gap: 4 },
-  metricValue: { color: "#f7fbf8", fontSize: 22, fontWeight: "700" },
-  metricLabel: { color: "#c9e6d4", fontSize: 13, fontWeight: "700" },
+  lineLabel: { color: "#6b726c", fontSize: 13, lineHeight: 18 },
+  lineValue: { color: colors.ink, fontSize: 16, lineHeight: 22 },
+  italic: { fontStyle: "italic" },
   qr: { alignItems: "flex-start", gap: 8, backgroundColor: "#fff", padding: 16, borderRadius: 24 },
 });

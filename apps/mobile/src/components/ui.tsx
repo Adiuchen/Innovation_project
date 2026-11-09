@@ -156,7 +156,7 @@ export function Loading({ label }: { label: string }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
   fill: { flex: 1 },
-  content: { padding: 16, paddingBottom: 32, gap: 12 },
+  content: { padding: 16, paddingBottom: 72, gap: 12 },
   title: { fontSize: 28, fontWeight: "700", color: colors.ink },
   muted: { color: colors.muted, fontSize: 15, lineHeight: 21 },
   card: {
