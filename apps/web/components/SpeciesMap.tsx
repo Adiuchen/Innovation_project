@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import "leaflet/dist/leaflet.css";
 
 export type MapPoint = {
   latitude: number;
@@ -35,7 +34,15 @@ export function SpeciesMap({
     let cancelled = false;
     let map: import("leaflet").Map | null = null;
 
-    import("leaflet").then((mod) => {
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "/leaflet/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    import("leaflet/dist/leaflet-src.js").then((mod) => {
       // Leaflet is a CommonJS package; depending on the bundler it arrives as `default` or as the module itself.
       const L = ((mod as unknown as { default?: typeof mod }).default ?? mod) as typeof mod;
       if (cancelled || !box.current) return;

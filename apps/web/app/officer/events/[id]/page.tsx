@@ -3,6 +3,7 @@ import { EventForm } from "@/components/EventForm";
 import { PageHeading } from "@/components/PageHeading";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
+import { eventDisplayStatus } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { updateEvent } from "../actions";
 
@@ -32,7 +33,7 @@ export default async function EditEventPage({
       <PageHeading backHref="/officer/events" backLabel={t.backPage} title={`${event.id} · ${t.editEvent}`} />
       {error && <p className="mb-3 text-sm text-red-700">{error}</p>}
       <p className="mb-4 text-sm">
-        {t.status}: <StatusBadge status={event.status} />
+        {t.status}: <StatusBadge status={eventDisplayStatus(event.status, event.starts_at, event.ends_at)} />
       </p>
       <EventForm
         action={updateEvent}

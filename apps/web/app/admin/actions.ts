@@ -32,11 +32,11 @@ export async function createAccount(formData: FormData) {
   const { t } = await getCopy();
 
   if (email && !isGmailAddress(email)) {
-    redirect("/admin?error=" + encodeURIComponent(t.gmailRequired));
+    redirect("/admin/users/new?error=" + encodeURIComponent(t.gmailRequired));
   }
 
   if (!STAFF_ROLES.includes(role)) {
-    redirect("/admin?error=" + encodeURIComponent("Choose Botanist, Officer, or Park guide."));
+    redirect("/admin/users/new?error=" + encodeURIComponent("Choose Botanist, Officer, or Park guide."));
   }
 
   const { data: existing } = await supabase.from("profiles").select("id");
@@ -56,7 +56,7 @@ export async function createAccount(formData: FormData) {
     const message = error?.message?.includes("rate limit")
       ? "Supabase blocked this account because it tried to email a confirmation. In Supabase, open Authentication, then Providers, then Email, and turn off Confirm email. Then create the account again."
       : (error?.message ?? "Could not create login");
-    redirect(`/admin?error=${encodeURIComponent(message)}`);
+    redirect(`/admin/users/new?error=${encodeURIComponent(message)}`);
   }
 
   const { error: profileError } = await supabase.from("profiles").insert({
@@ -69,9 +69,9 @@ export async function createAccount(formData: FormData) {
   });
 
   if (profileError) {
-    redirect(`/admin?error=${encodeURIComponent(profileError.message)}`);
+    redirect(`/admin/users/new?error=${encodeURIComponent(profileError.message)}`);
   }
-  redirect(`/admin?created=${loginId}`);
+  redirect(`/admin/users/new?created=${loginId}`);
 }
 
 export async function updateAccount(formData: FormData) {
@@ -79,19 +79,19 @@ export async function updateAccount(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (status !== "active" && status !== "suspended") {
-    redirect("/admin?error=" + encodeURIComponent("Choose active or suspended."));
+    redirect("/admin/users?error=" + encodeURIComponent("Choose active or suspended."));
   }
 
   const { data: target } = await supabase.from("profiles").select("role").eq("uuid", id).maybeSingle();
   if (!target) {
-    redirect("/admin?error=" + encodeURIComponent("Account not found."));
+    redirect("/admin/users?error=" + encodeURIComponent("Account not found."));
   }
 
   let role = target.role;
   if (STAFF_ROLES.includes(target.role)) {
     const nextRole = String(formData.get("role"));
     if (!STAFF_ROLES.includes(nextRole)) {
-      redirect("/admin?error=" + encodeURIComponent("Choose Botanist, Officer, or Park guide."));
+      redirect("/admin/users?error=" + encodeURIComponent("Choose Botanist, Officer, or Park guide."));
     }
     role = nextRole;
   }
@@ -101,8 +101,8 @@ export async function updateAccount(formData: FormData) {
     .update({ role, status })
     .eq("uuid", id);
 
-  if (error) redirect(`/admin?error=${encodeURIComponent(error.message)}`);
-  redirect("/admin");
+  if (error) redirect(`/admin/users?error=${encodeURIComponent(error.message)}`);
+  redirect("/admin/users");
 }
 
 export async function createSensor(formData: FormData) {

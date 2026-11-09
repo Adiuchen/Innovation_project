@@ -10,10 +10,14 @@ export type Profile = {
   status: "active" | "suspended";
 };
 
+const STAFF_ROLES = ["botanist", "conservation_officer", "administrator", "guide"] as const;
+
+export function isStaffRole(role: string | null | undefined) {
+  return !!role && (STAFF_ROLES as readonly string[]).includes(role);
+}
+
 export function homeForRole(role: Profile["role"]) {
-  if (role === "botanist" || role === "conservation_officer" || role === "administrator" || role === "guide") {
-    return "/dashboard";
-  }
+  if (isStaffRole(role)) return "/dashboard";
   return "/";
 }
 

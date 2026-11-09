@@ -26,6 +26,10 @@ export function qrCodeForRecord(uuid: string) {
   return `plant-${uuid.slice(0, 8)}`;
 }
 
+export function plantVisibility(value: unknown): "ordinary" | "rare" {
+  return value === "rare" ? "rare" : "ordinary";
+}
+
 /** First 8 hex chars from a `plant-xxxxxxxx` tag, used to match local_id / server uuid. */
 export function plantCodePrefix(code: string) {
   const match = /^plant-([0-9a-f]{8})$/i.exec(code.trim());
@@ -101,10 +105,25 @@ export function recordName(plantName: string | null | undefined, speciesName: st
 export function fieldProblems(input: FieldInput) {
   const problems: string[] = [];
   if (!textOrNull(input.plant_name)) problems.push("Enter a plant name.");
-  if (invalidNumber(input.height_m)) problems.push("Height must be a number.");
-  if (invalidNumber(input.trunk_diameter_cm)) problems.push("Trunk diameter must be a number.");
-  if (invalidNumber(input.latitude)) problems.push("Latitude must be a number.");
-  if (invalidNumber(input.longitude)) problems.push("Longitude must be a number.");
+  if (!input.species_id) problems.push("Choose a species.");
+  if (!textOrNull(input.life_stage)) problems.push("Choose a life stage.");
+  if (!textOrNull(input.height_m)) problems.push("Enter height.");
+  else if (invalidNumber(input.height_m)) problems.push("Height must be a number.");
+  if (!textOrNull(input.trunk_diameter_cm)) problems.push("Enter trunk diameter.");
+  else if (invalidNumber(input.trunk_diameter_cm)) problems.push("Trunk diameter must be a number.");
+  if (!textOrNull(input.latitude)) problems.push("Enter latitude.");
+  else if (invalidNumber(input.latitude)) problems.push("Latitude must be a number.");
+  if (!textOrNull(input.longitude)) problems.push("Enter longitude.");
+  else if (invalidNumber(input.longitude)) problems.push("Longitude must be a number.");
+  if (!textOrNull(input.location_name)) problems.push("Enter a place name.");
+  if (!textOrNull(input.leaf_traits)) problems.push("Choose leaf traits.");
+  if (!textOrNull(input.flower_fruit_traits)) problems.push("Choose flower or fruit traits.");
+  if (!textOrNull(input.health_status)) problems.push("Choose a health status.");
+  if (!textOrNull(input.other_traits)) problems.push("Enter other traits.");
+  if (input.photos.length === 0) problems.push("Add a photo.");
+  else if (input.photos.some((photo) => !photo.remote_url && !textOrNull(photo.caption))) {
+    problems.push("Enter a caption for every photo.");
+  }
   return problems;
 }
 

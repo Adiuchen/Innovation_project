@@ -10,7 +10,7 @@ import {
 } from "@/lib/db";
 import { speciesPhoto, storageObjectPath } from "@/lib/photo-path";
 import { cachePhotoFiles, deleteLocalPhoto, photoTimestamps, uploadPlantPhoto } from "@/lib/photos";
-import { numberOrNull, plantCodePrefix, qrCodeForRecord, textOrNull } from "@/lib/plant";
+import { numberOrNull, plantCodePrefix, plantVisibility, qrCodeForRecord, textOrNull } from "@/lib/plant";
 import {
   cachedPublicDetail,
   forgetPublicPlant,
@@ -66,6 +66,7 @@ type RecordApi = {
   health_status: string | null;
   other_traits: string | null;
   qr_code: string | null;
+  visibility?: string | null;
   review_note: string | null;
   recorded_at: string | null;
   species:
@@ -99,6 +100,7 @@ function recordPayload(draft: Draft) {
     latitude: numberOrNull(draft.latitude),
     longitude: numberOrNull(draft.longitude),
     qr_code: qrCode,
+    visibility: plantVisibility(draft.visibility),
     status: draft.status,
     sync_status: "synced",
   };
@@ -208,8 +210,11 @@ async function uploadDrafts(userId: string): Promise<SyncResult> {
           }
           recordId = found.recordId;
         } else {
-          await saveDraft({ ...draft, sync_error: inserted.error.message });
-          return { uploaded, error: inserted.error.message };
+          const message = /visibility/i.test(inserted.error.message)
+            ? "Ask an administrator to run apps/mobile/supabase/rare-plants.sql in the Supabase SQL editor, then sync again."
+            : inserted.error.message;
+          await saveDraft({ ...draft, sync_error: message });
+          return { uploaded, error: message };
         }
       } else {
         recordId = inserted.data.uuid;
@@ -320,13 +325,21 @@ export async function refreshReferenceData(profile: Profile) {
   // Repair offline tags: if local_id exists, qr_code must be plant-{local_id[0:8]} so printed QRs keep working.
   await repairClientQrCodes(profile.uuid);
 
-  const recordsResult = await supabase
+  const recordColumns =
+    "uuid, id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, visibility, review_note, recorded_at, species(scientific_name, common_name)";
+  const primaryRecords = await supabase
     .from("plant_records")
-    .select(
-      "uuid, id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, review_note, recorded_at, species(scientific_name, common_name)",
-    )
+    .select(recordColumns)
     .eq("botanist_id", profile.uuid)
     .order("recorded_at", { ascending: false });
+  const recordsResult =
+    primaryRecords.error && /visibility/i.test(primaryRecords.error.message)
+      ? await supabase
+          .from("plant_records")
+          .select(recordColumns.replace(", visibility", ""))
+          .eq("botanist_id", profile.uuid)
+          .order("recorded_at", { ascending: false })
+      : primaryRecords;
 
   if (recordsResult.error) return recordsResult.error.message;
 
@@ -372,6 +385,7 @@ export async function refreshReferenceData(profile: Profile) {
       health_status: row.health_status,
       other_traits: row.other_traits,
       qr_code: row.qr_code,
+      visibility: plantVisibility(row.visibility),
       review_note: row.review_note,
       recorded_at: row.recorded_at,
       photos,
@@ -456,6 +470,7 @@ function recordFromApi(row: RecordApi, userId = ""): CachedRecord {
     health_status: row.health_status,
     other_traits: row.other_traits,
     qr_code: row.qr_code,
+    visibility: plantVisibility(row.visibility),
     review_note: row.review_note,
     recorded_at: row.recorded_at,
     photos: [],
@@ -464,24 +479,30 @@ function recordFromApi(row: RecordApi, userId = ""): CachedRecord {
 
 async function lookupRemoteRecord(code: string): Promise<TagHit | null> {
   const select =
-    "uuid, id, botanist_id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, review_note, recorded_at, local_id, species(scientific_name, common_name)";
-  const remote = await supabase.from("plant_records").select(select).eq("qr_code", code).maybeSingle();
-  if (!remote.error && remote.data) return { kind: "record", record: recordFromApi(remote.data as RecordApi) };
+    "uuid, id, botanist_id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, visibility, review_note, recorded_at, local_id, species(scientific_name, common_name)";
+  const plainSelect = select.replace(", visibility", "");
+  const primaryRemote = await supabase.from("plant_records").select(select).eq("qr_code", code).maybeSingle();
+  const remote =
+    primaryRemote.error && /visibility/i.test(primaryRemote.error.message)
+      ? await supabase.from("plant_records").select(plainSelect).eq("qr_code", code).maybeSingle()
+      : primaryRemote;
+  if (!remote.error && remote.data) return { kind: "record", record: recordFromApi(remote.data as unknown as RecordApi) };
 
   const prefix = plantCodePrefix(code);
   if (!prefix) return null;
+  const columns = primaryRemote.error && /visibility/i.test(primaryRemote.error.message) ? plainSelect : select;
   const aliased = await supabase
     .from("plant_records")
-    .select(select)
+    .select(columns)
     .or(`local_id.ilike.${prefix}%,uuid.ilike.${prefix}%`)
     .limit(5);
   if (aliased.error) return null;
-  const hit = (aliased.data ?? []).find((row) => {
-    const local = typeof (row as { local_id?: string }).local_id === "string" ? (row as { local_id: string }).local_id.toLowerCase() : "";
+  const hit = ((aliased.data ?? []) as unknown as RecordApi[]).find((row) => {
+    const local = typeof row.local_id === "string" ? row.local_id.toLowerCase() : "";
     const uuid = typeof row.uuid === "string" ? row.uuid.toLowerCase() : "";
     return local.startsWith(prefix) || uuid.startsWith(prefix);
   });
-  return hit ? { kind: "record", record: recordFromApi(hit as RecordApi) } : null;
+  return hit ? { kind: "record", record: recordFromApi(hit) } : null;
 }
 
 export async function lookupTag(code: string, online: boolean): Promise<TagHit> {

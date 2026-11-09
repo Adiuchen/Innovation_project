@@ -2,6 +2,7 @@ import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { ensureSpecies } from "@/app/botanist/actions";
 import { choiceFromForm } from "@/lib/field-choices";
 import { numberOrNull, textOrNull } from "@/lib/format";
+import { plantVisibility } from "@/lib/plant-access";
 import { photoProblemMessage, uploadPlantPhoto } from "@/lib/photos";
 
 export type CachedSpecies = {
@@ -27,6 +28,7 @@ export type FieldDraft = {
   flowerFruitTraits: string;
   healthStatus: string;
   otherTraits: string;
+  visibility?: "ordinary" | "rare";
   photoUrl: string;
   photoCaption: string;
   photoName?: string;
@@ -129,6 +131,7 @@ export function draftFromForm(formData: FormData, species: CachedSpecies[]): Fie
     flowerFruitTraits: choiceFromForm(formData, "flower_fruit_traits") ?? "",
     healthStatus: choiceFromForm(formData, "health_status") ?? "",
     otherTraits: String(formData.get("other_traits") || ""),
+    visibility: plantVisibility(formData.get("visibility")),
     photoUrl: "",
     photoCaption: String(formData.get("photo_caption") || ""),
     status,
@@ -170,6 +173,7 @@ export async function syncDrafts() {
         location_name: textOrNull(draft.locationName),
         latitude: numberOrNull(draft.latitude),
         longitude: numberOrNull(draft.longitude),
+        visibility: plantVisibility(draft.visibility),
         status: draft.status,
         sync_status: "synced",
       })

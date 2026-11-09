@@ -25,13 +25,19 @@ const lifeStageLabels: Record<string, string> = {
 export default function PublicPlantScreen() {
   const { code: rawCode } = useLocalSearchParams<{ code: string }>();
   const code = decodeURIComponent(firstParam(rawCode));
-  const { online } = useAuth();
+  const { online, profile } = useAuth();
+  const staff =
+    profile?.status === "active" &&
+    (profile.role === "botanist" ||
+      profile.role === "conservation_officer" ||
+      profile.role === "administrator" ||
+      profile.role === "guide");
   const [page, setPage] = useState<GuestPlantPage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    resolveGuestPlantPage(code, online)
+    resolveGuestPlantPage(code, online, staff)
       .then((result) => {
         if (!cancelled) {
           setPage(result);
@@ -47,7 +53,7 @@ export default function PublicPlantScreen() {
     return () => {
       cancelled = true;
     };
-  }, [code, online]);
+  }, [code, online, staff]);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -79,6 +85,11 @@ export default function PublicPlantScreen() {
             officer approves the record.
           </Text>
           <Text style={styles.progressCode}>{code}</Text>
+        </View>
+      ) : page?.kind === "closed" ? (
+        <View style={styles.progress}>
+          <Text style={styles.progressTitle}>This plant is not open</Text>
+          <Text style={styles.progressBody}>This plant is not open to the public.</Text>
         </View>
       ) : page?.kind === "missing" ? (
         <Text style={styles.status}>

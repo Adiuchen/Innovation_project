@@ -15,11 +15,13 @@ export function SpeciesSelect({
   species,
   defaultValue = "",
   compact = false,
+  required = false,
 }: {
   t: Copy;
   species: SpeciesChoice[];
   defaultValue?: string;
   compact?: boolean;
+  required?: boolean;
 }) {
   const [choice, setChoice] = useState(defaultValue);
   const fieldClass = compact
@@ -34,9 +36,10 @@ export function SpeciesSelect({
           className={fieldClass}
           name="species_id"
           value={choice}
+          required={required}
           onChange={(event) => setChoice(event.target.value)}
         >
-          <option value="">{t.notIdentified}</option>
+          <option value="">{required ? "—" : t.notIdentified}</option>
           <option value="new">{t.newSpecies}</option>
           {species.map((item) => (
             <option key={item.uuid} value={item.uuid}>

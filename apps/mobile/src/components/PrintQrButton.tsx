@@ -32,7 +32,17 @@ export function PrintQrButton({ qrCode, label }: { qrCode: string; label?: strin
           const error = await printPlantQrLocal(qrCode, { host, port: printerPort(portText) }, label);
           setPrinting(false);
           setFailed(Boolean(error));
-          setMessage(!error ? t.qrPrinted : error === "printer" ? t.qrPrintFailed : error);
+          setMessage(
+            !error
+              ? t.qrPrinted
+              : error === "printer"
+                ? t.qrPrintFailed
+                : error === "dev-build"
+                  ? t.printNeedsDevBuild
+                  : error === "website"
+                    ? t.printSiteDown
+                    : error,
+          );
         }}
       />
       {message ? <Notice tone={failed ? "danger" : "ok"}>{message}</Notice> : null}

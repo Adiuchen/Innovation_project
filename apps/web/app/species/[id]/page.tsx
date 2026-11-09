@@ -49,13 +49,22 @@ export default async function SpeciesPage({
   // Staff read with their own session. Visitors cannot read plant_records directly, so the server
   // reads with the service key (if set) and only sends rounded areas to the browser.
   const reader = isStaff ? supabase : (createAdminClient() ?? supabase);
-  const { data: located } = await reader
-    .from("plant_records")
-    .select("uuid, id, plant_name, location_name, latitude, longitude, qr_code")
-    .eq("species_id", id)
-    .eq("status", "approved")
-    .not("latitude", "is", null)
-    .not("longitude", "is", null);
+  const locatedQuery = (hideRare: boolean) => {
+    let query = reader
+      .from("plant_records")
+      .select("uuid, id, plant_name, location_name, latitude, longitude, qr_code")
+      .eq("species_id", id)
+      .eq("status", "approved")
+      .not("latitude", "is", null)
+      .not("longitude", "is", null);
+    if (hideRare) query = query.eq("visibility", "ordinary");
+    return query;
+  };
+  const locatedResult = await locatedQuery(!isStaff);
+  const { data: located } =
+    !isStaff && locatedResult.error && /visibility/i.test(locatedResult.error.message)
+      ? await locatedQuery(false)
+      : locatedResult;
 
   const records = (located ?? []) as LocatedRecord[];
   const points = isStaff ? exactPoints(records, species.scientific_name, t) : areaPoints(records, t);

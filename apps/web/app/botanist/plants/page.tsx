@@ -2,6 +2,7 @@ import { ApprovedPlantList, type ApprovedPlantRow } from "@/app/botanist/plants/
 import { PageHeading } from "@/components/PageHeading";
 import { requireUser } from "@/lib/auth";
 import { getCopy } from "@/lib/i18n";
+import { listRareApproved } from "@/lib/staff-plants";
 
 export default async function ApprovedPlantsPage() {
   const { supabase } = await requireUser(["botanist"]);
@@ -11,7 +12,14 @@ export default async function ApprovedPlantsPage() {
     .select("plant_id, plant_name, scientific_name, common_name, local_name, location_name, recorded_by, recorded_at")
     .order("recorded_at", { ascending: false });
 
-  const rows: ApprovedPlantRow[] = (data ?? []).map((plant) => {
+  const published = data ?? [];
+  const rare = await listRareApproved(supabase);
+  const seen = new Set(published.map((plant) => plant.plant_id));
+  const plants = [
+    ...published,
+    ...rare.filter((plant) => plant.plant_id && !seen.has(plant.plant_id)),
+  ];
+  const rows: ApprovedPlantRow[] = plants.map((plant) => {
     const name = plant.plant_name || plant.scientific_name || t.unidentified;
     return {
       id: plant.plant_id,

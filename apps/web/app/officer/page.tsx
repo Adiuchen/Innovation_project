@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { PageHeading } from "@/components/PageHeading";
+import { ReviewDecisionForm } from "@/components/ReviewDecisionForm";
+import { ReviewToast } from "@/components/ReviewToast";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
 import { healthLabels, optionLabel } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
+import { reviewNotice } from "@/lib/review-notice";
 import { reviewRecord } from "./actions";
 
 export default async function OfficerHome({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; error?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; error?: string; done?: string; plant?: string }>;
 }) {
-  const { status = "submitted", q = "", error } = await searchParams;
+  const { status = "submitted", q = "", error, done, plant } = await searchParams;
   const { supabase } = await requireUser(["conservation_officer"]);
   const { t } = await getCopy();
 
@@ -23,6 +26,8 @@ export default async function OfficerHome({
   if (status && status !== "all") request = request.eq("status", status);
   const { data: records, error: queryError } = await request;
 
+  const notice = reviewNotice(done, plant, t);
+  const next = `/officer?${new URLSearchParams({ status, ...(q ? { q } : {}) }).toString()}`;
   const query = q.trim().toLowerCase();
   const filtered = (records ?? []).filter((record) => {
     if (!query) return true;
@@ -39,11 +44,12 @@ export default async function OfficerHome({
         title={t.reviewRecords}
         extra={
           <div className="flex flex-wrap items-center gap-3">
-            <Link className="rounded-full border border-emerald-950/15 bg-white px-3 py-1.5 text-sm" href="/officer/plants">{t.viewPlants}</Link>
+            <Link className="rounded-full border border-emerald-950/15 bg-white px-3 py-1.5 text-sm" href="/officer/history">{t.history}</Link>
             <a className="text-sm underline" href="/officer/report">{t.exportCsv}</a>
           </div>
         }
       />
+      {notice && <ReviewToast message={notice.message} tone={notice.tone} />}
       {(error || queryError) && (
         <p className="mt-3 text-sm text-red-700">{error || queryError?.message}</p>
       )}
@@ -67,43 +73,35 @@ export default async function OfficerHome({
           const canDecide = record.status === "submitted" || record.status === "needs_revision";
           const earlierNote = record.status === "submitted" ? record.review_note : null;
           return (
-            <article key={record.uuid} className="surface p-4">
-              <h2 className="font-medium">{record.id} · {record.plant_name || species?.scientific_name || t.unidentified}</h2>
-              <p className="text-sm text-neutral-600">
-                {species?.common_name || t.noCommonName} · {botanist?.name || t.unknownBotanist} · <StatusBadge status={record.status} />
+            <article key={record.uuid} className="surface px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="font-medium">{record.id} · {record.plant_name || species?.scientific_name || t.unidentified}</h2>
+                <StatusBadge status={record.status} />
+              </div>
+              <p className="mt-1 text-sm text-neutral-600">
+                {species?.common_name || t.noCommonName} · {botanist?.name || t.unknownBotanist}
               </p>
-              <p className="text-sm">
+              <p className="mt-1 text-sm text-neutral-800">
                 {record.location_name || t.noPlaceName}
                 {record.latitude != null ? ` · ${record.latitude}, ${record.longitude}` : ""}
                 {record.health_status ? ` · ${t.health}: ${optionLabel(record.health_status, healthLabels(t))}` : ""}
               </p>
               {canDecide ? (
-                <form action={reviewRecord} className="mt-3 space-y-2">
-                  <input type="hidden" name="id" value={record.uuid} />
-                  {earlierNote ? (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
-                      <span className="font-medium">{t.earlierNote}</span>
-                      <span className="mt-1 block whitespace-pre-wrap">{earlierNote}</span>
-                      <span className="mt-1 block text-xs text-amber-800">{t.earlierNoteHint}</span>
-                    </p>
-                  ) : null}
-                  <textarea
-                    className="w-full rounded border px-2 py-1"
-                    name="review_note"
-                    rows={2}
-                    placeholder={t.noteToBotanist}
-                    defaultValue={earlierNote ? "" : (record.review_note ?? "")}
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <Link className="inline-flex items-center rounded border border-forest px-3 py-1 text-sm font-semibold text-forest" href={reviewHref}>{t.reviewFull}</Link>
-                    <button className="btn" name="status" value="approved">{t.approve}</button>
-                    <button className="rounded border px-3 py-1" name="status" value="needs_revision">{t.requestChanges}</button>
-                    <button className="rounded border border-red-300 px-3 py-1 text-red-800" name="status" value="rejected">{t.reject}</button>
-                  </div>
-                </form>
+                <ReviewDecisionForm
+                  action={reviewRecord}
+                  recordId={record.uuid}
+                  next={next}
+                  plantLabel={`${record.id} · ${record.plant_name || species?.scientific_name || t.unidentified}`}
+                  earlierNote={earlierNote}
+                  defaultNote={earlierNote ? "" : (record.review_note ?? "")}
+                  reviewHref={reviewHref}
+                  showNote={false}
+                  className="mt-4 space-y-3"
+                  labels={t}
+                />
               ) : (
-                <div className="mt-3">
-                  <Link className="inline-flex items-center rounded border border-forest px-3 py-1 text-sm font-semibold text-forest" href={reviewHref}>{t.reviewFull}</Link>
+                <div className="mt-4 flex justify-end border-t border-emerald-950/10 pt-3">
+                  <Link className="inline-flex h-9 items-center rounded-lg border border-forest bg-white px-3 text-sm font-semibold text-forest" href={reviewHref}>{t.reviewFull}</Link>
                 </div>
               )}
             </article>

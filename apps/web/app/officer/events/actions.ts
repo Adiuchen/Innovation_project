@@ -14,7 +14,7 @@ function fail(path: string, message: string): never {
 
 function officerEventsPath(value: FormDataEntryValue | null) {
   const path = String(value ?? "").trim();
-  if (path === "/officer/events" || path.startsWith("/officer/events?")) return path;
+  if (path === "/officer/events" || path.startsWith("/officer/events?") || path === "/officer/events/history") return path;
   return "/officer/events";
 }
 

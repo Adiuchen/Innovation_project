@@ -1,6 +1,6 @@
 import { storageObjectPath } from "@/lib/photo-path";
 import { uploadPlantPhoto } from "@/lib/photos";
-import { numberOrNull, qrCodeForRecord, textOrNull } from "@/lib/plant";
+import { numberOrNull, plantVisibility, qrCodeForRecord, textOrNull } from "@/lib/plant";
 import { photoBucket, supabase } from "@/lib/supabase";
 import type { FieldInput } from "@/types";
 
@@ -54,6 +54,7 @@ export async function resubmitRecord(
       location_name: textOrNull(input.location_name),
       latitude: numberOrNull(input.latitude),
       longitude: numberOrNull(input.longitude),
+      visibility: plantVisibility(input.visibility),
       ...(options.keepStatus ? {} : { status: "submitted" }),
       ...(assignQr ? { qr_code: assignQr } : {}),
     })
@@ -103,6 +104,9 @@ export async function generateRecordQr(recordId: string) {
 }
 
 function friendlyError(message: string) {
+  if (/visibility/i.test(message) && /column|schema cache|could not find/i.test(message)) {
+    return "Ask an administrator to run apps/mobile/supabase/rare-plants.sql in the Supabase SQL editor, then save again.";
+  }
   if (/permission denied/i.test(message)) {
     return "The database refused this change (permission denied). Sign out and sign in again. If it still happens, ask the administrator to check that botanists may update their own plant records.";
   }

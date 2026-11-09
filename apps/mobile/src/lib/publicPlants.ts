@@ -10,7 +10,7 @@ import {
 } from "@/lib/db";
 import { isDisplayablePhoto } from "@/lib/photo-path";
 import { cachePhotoFiles } from "@/lib/photos";
-import { plantCodePrefix } from "@/lib/plant";
+import { plantCodePrefix, plantVisibility } from "@/lib/plant";
 import { supabase } from "@/lib/supabase";
 import type { PhotoRef } from "@/types";
 
@@ -114,9 +114,10 @@ export async function loadPublicPlant(code: string, online = true): Promise<Publ
 export type GuestPlantPage =
   | { kind: "plant"; plant: PublicPlantDetail }
   | { kind: "in_progress"; code: string }
+  | { kind: "closed" }
   | { kind: "missing"; offline: boolean };
 
-export type ResolvedPlantTag = { qr_code: string; status: string };
+export type ResolvedPlantTag = { qr_code: string; status: string; visibility: "ordinary" | "rare" };
 
 /**
  * Map a scanned/printed tag to the canonical server qr_code.
@@ -128,13 +129,13 @@ export async function resolveCanonicalPlantTag(code: string): Promise<ResolvedPl
     const row = Array.isArray(rpc.data) ? rpc.data[0] : null;
     if (row && typeof row.status === "string") {
       const qr = typeof row.qr_code === "string" && row.qr_code ? row.qr_code : code;
-      return { qr_code: qr, status: row.status };
+      return { qr_code: qr, status: row.status, visibility: plantVisibility(row.visibility) };
     }
   }
 
   const byQr = await supabase.from("plant_records").select("qr_code, status").eq("qr_code", code).maybeSingle();
   if (!byQr.error && byQr.data && typeof byQr.data.status === "string") {
-    return { qr_code: byQr.data.qr_code || code, status: byQr.data.status };
+    return { qr_code: byQr.data.qr_code || code, status: byQr.data.status, visibility: "ordinary" };
   }
 
   const prefix = plantCodePrefix(code);
@@ -151,7 +152,7 @@ export async function resolveCanonicalPlantTag(code: string): Promise<ResolvedPl
         return local.startsWith(prefix) || uuid.startsWith(prefix);
       });
       if (hit && typeof hit.status === "string") {
-        return { qr_code: hit.qr_code || code, status: hit.status };
+        return { qr_code: hit.qr_code || code, status: hit.status, visibility: "ordinary" };
       }
     }
   }
@@ -159,7 +160,7 @@ export async function resolveCanonicalPlantTag(code: string): Promise<ResolvedPl
   const progress = await supabase.rpc("plant_tag_progress", { code });
   if (!progress.error) {
     const row = Array.isArray(progress.data) ? progress.data[0] : null;
-    if (row && typeof row.status === "string") return { qr_code: code, status: row.status };
+    if (row && typeof row.status === "string") return { qr_code: code, status: row.status, visibility: "ordinary" };
   }
 
   return null;
@@ -176,7 +177,7 @@ async function fetchApprovedRecordAsPlant(code: string): Promise<PublicPlantDeta
   const remote = await supabase
     .from("plant_records")
     .select(
-      "qr_code, plant_name, life_stage, location_name, height_m, health_status, status, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance)",
+      "uuid, qr_code, plant_name, life_stage, location_name, height_m, health_status, status, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance)",
     )
     .eq("qr_code", code)
     .eq("status", "approved")
@@ -189,7 +190,7 @@ async function fetchApprovedRecordAsPlant(code: string): Promise<PublicPlantDeta
       const aliased = await supabase
         .from("plant_records")
         .select(
-          "qr_code, plant_name, life_stage, location_name, height_m, health_status, status, local_id, uuid, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance)",
+          "uuid, qr_code, plant_name, life_stage, location_name, height_m, health_status, status, local_id, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance)",
         )
         .eq("status", "approved")
         .or(`local_id.ilike.${prefix}%,uuid.ilike.${prefix}%`)
@@ -205,9 +206,15 @@ async function fetchApprovedRecordAsPlant(code: string): Promise<PublicPlantDeta
   if (!row) return null;
 
   const canonical = textField(row, "qr_code") ?? code;
+  const recordId = textField(row, "uuid");
   const speciesRaw = row.species;
   const species = (Array.isArray(speciesRaw) ? speciesRaw[0] : speciesRaw) as Record<string, unknown> | null;
-  const photos = await supabase.from("public_plant_photos").select("storage_path, caption").eq("qr_code", canonical);
+  const owned = recordId
+    ? await supabase.from("plant_photos").select("storage_path, caption").eq("plant_record_id", recordId).is("hidden_at", null)
+    : { error: null, data: [] as PublicPlantPhoto[] };
+  const photos = !owned.error && owned.data && owned.data.length > 0
+    ? owned
+    : await supabase.from("public_plant_photos").select("storage_path, caption").eq("qr_code", canonical);
   const visible = photos.error
     ? []
     : ((photos.data ?? []) as PublicPlantPhoto[]).filter(
@@ -237,7 +244,16 @@ async function fetchApprovedRecordAsPlant(code: string): Promise<PublicPlantDeta
 }
 
 /** Guest / visitor path: approved public page, otherwise In Progress for a known non-approved tag. */
-export async function resolveGuestPlantPage(code: string, online = true): Promise<GuestPlantPage> {
+export async function resolveGuestPlantPage(code: string, online = true, staff = false): Promise<GuestPlantPage> {
+  if (online) {
+    const resolved = await resolveCanonicalPlantTag(code).catch(() => null);
+    if (resolved?.visibility === "rare" && !staff) {
+      await forgetPublicPlant(code).catch(() => undefined);
+      if (resolved.qr_code && resolved.qr_code !== code) await forgetPublicPlant(resolved.qr_code).catch(() => undefined);
+      return { kind: "closed" };
+    }
+  }
+
   try {
     const plant = await loadPublicPlant(code, online);
     if (plant) return { kind: "plant", plant };
@@ -446,13 +462,98 @@ export async function listApprovedPlants() {
     .select("plant_id, qr_code, plant_name, scientific_name, common_name, local_name, location_name, recorded_by, recorded_at")
     .order("recorded_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as ApprovedPlant[]).filter((plant) => plant.plant_id);
+  const published = ((data ?? []) as ApprovedPlant[]).filter((plant) => plant.plant_id);
+  const rare = await supabase
+    .from("plant_records")
+    .select(
+      "id, qr_code, plant_name, location_name, recorded_at, species(scientific_name, common_name, local_name), profiles!plant_records_botanist_id_fkey(name)",
+    )
+    .eq("status", "approved")
+    .eq("visibility", "rare");
+  if (rare.error || !rare.data) return published;
+  const seen = new Set(published.map((plant) => plant.plant_id));
+  const extra = (rare.data as Record<string, unknown>[]).flatMap((row) => {
+    const plantId = textField(row, "id");
+    if (!plantId || seen.has(plantId)) return [];
+    const speciesRaw = row.species;
+    const species = (Array.isArray(speciesRaw) ? speciesRaw[0] : speciesRaw) as Record<string, unknown> | null;
+    const botanistRaw = row.profiles;
+    const botanist = (Array.isArray(botanistRaw) ? botanistRaw[0] : botanistRaw) as Record<string, unknown> | null;
+    const plant: ApprovedPlant = {
+      plant_id: plantId,
+      qr_code: textField(row, "qr_code") ?? "",
+      plant_name: textField(row, "plant_name"),
+      scientific_name: textField(species ?? {}, "scientific_name"),
+      common_name: textField(species ?? {}, "common_name"),
+      local_name: textField(species ?? {}, "local_name"),
+      location_name: textField(row, "location_name"),
+      recorded_by: textField(botanist ?? {}, "name"),
+      recorded_at: textField(row, "recorded_at"),
+    };
+    return [plant];
+  });
+  return [...published, ...extra];
+}
+
+async function loadRareApprovedPlant(plantId: string): Promise<ApprovedPlantDetail | null> {
+  const { data, error } = await supabase
+    .from("plant_records")
+    .select(
+      "uuid, id, qr_code, plant_name, life_stage, location_name, latitude, longitude, height_m, health_status, recorded_at, species(scientific_name, common_name, local_name, family, genus, conservation_status, description, distribution, ecological_info, cultural_significance), profiles!plant_records_botanist_id_fkey(name)",
+    )
+    .eq("id", plantId)
+    .eq("status", "approved")
+    .eq("visibility", "rare")
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const row = data as Record<string, unknown>;
+  const speciesRaw = row.species;
+  const species = (Array.isArray(speciesRaw) ? speciesRaw[0] : speciesRaw) as Record<string, unknown> | null;
+  const botanistRaw = row.profiles;
+  const botanist = (Array.isArray(botanistRaw) ? botanistRaw[0] : botanistRaw) as Record<string, unknown> | null;
+  const recordId = textField(row, "uuid");
+  const code = textField(row, "qr_code") ?? "";
+  const photos = recordId
+    ? await supabase.from("plant_photos").select("storage_path, caption").eq("plant_record_id", recordId).is("hidden_at", null)
+    : { error: null, data: [] as PublicPlantPhoto[] };
+  const visible = photos.error
+    ? []
+    : ((photos.data ?? []) as PublicPlantPhoto[]).filter(
+        (photo) => photo.storage_path && isDisplayablePhoto(photo.storage_path),
+      );
+
+  return {
+    plant_id: textField(row, "id") ?? plantId,
+    qr_code: code,
+    plant_name: textField(row, "plant_name"),
+    scientific_name: textField(species ?? {}, "scientific_name"),
+    common_name: textField(species ?? {}, "common_name"),
+    local_name: textField(species ?? {}, "local_name"),
+    conservation_status: textField(species ?? {}, "conservation_status"),
+    health_status: textField(row, "health_status"),
+    family: textField(species ?? {}, "family"),
+    genus: textField(species ?? {}, "genus"),
+    description: textField(species ?? {}, "description"),
+    distribution: textField(species ?? {}, "distribution"),
+    ecological_info: textField(species ?? {}, "ecological_info"),
+    cultural_significance: textField(species ?? {}, "cultural_significance"),
+    location_name: textField(row, "location_name"),
+    height_m: numberField(row, "height_m"),
+    life_stage: textField(row, "life_stage"),
+    image_path: visible[0]?.storage_path ?? null,
+    photos: visible,
+    latitude: numberField(row, "latitude"),
+    longitude: numberField(row, "longitude"),
+    recorded_by: textField(botanist ?? {}, "name"),
+    recorded_at: textField(row, "recorded_at"),
+  };
 }
 
 export async function loadApprovedPlant(plantId: string): Promise<ApprovedPlantDetail | null> {
   const page = await supabase.from("public_plant_pages").select("*").eq("plant_id", plantId).maybeSingle();
   if (page.error) throw new Error(page.error.message);
-  if (!page.data) return null;
+  if (!page.data) return loadRareApprovedPlant(plantId);
 
   const row = page.data as Record<string, unknown>;
   const code = textField(row, "qr_code") ?? "";

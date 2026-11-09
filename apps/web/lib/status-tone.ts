@@ -11,6 +11,7 @@ const tones: Record<string, string> = {
   draft: "bg-neutral-100 text-neutral-700",
   rejected: "bg-red-100 text-red-800",
   cancelled: "bg-red-100 text-red-800",
+  expired: "bg-neutral-200 text-neutral-800",
   suspended: "bg-red-100 text-red-800",
   offline: "bg-red-100 text-red-800",
   possible_theft: "bg-red-100 text-red-800",

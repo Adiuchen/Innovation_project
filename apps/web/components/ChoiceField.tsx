@@ -8,12 +8,14 @@ export function ChoiceField({
   options,
   value,
   otherLabel,
+  required = false,
 }: {
   name: string;
   label: string;
   options: { value: string; label: string }[];
   value?: string | null;
   otherLabel: string;
+  required?: boolean;
 }) {
   const matched = options.find(
     (option) => option.value !== "other" && (option.value === value || option.label.toLowerCase() === (value ?? "").toLowerCase()),
@@ -28,6 +30,7 @@ export function ChoiceField({
           className="mt-1 w-full rounded-lg border px-3 py-2"
           name={name}
           value={selected}
+          required={required}
           onChange={(event) => setSelected(event.target.value)}
         >
           <option value="">—</option>

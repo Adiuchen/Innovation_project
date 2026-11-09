@@ -97,6 +97,7 @@ export default function RecordDetailScreen() {
             flower_fruit_traits: record.flower_fruit_traits ?? "",
             health_status: record.health_status ?? "",
             other_traits: record.other_traits ?? "",
+            visibility: record.visibility === "rare" ? "rare" : "ordinary",
             photos: record.photos.map((photo, index) => ({
               id: `saved-${index}`,
               uri: photo.storage_path,

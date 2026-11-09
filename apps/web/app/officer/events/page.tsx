@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { ConfirmDelete } from "@/components/ConfirmDelete";
+import { redirect } from "next/navigation";
+import { EventCard, type EventListItem } from "@/components/EventCard";
 import { PageHeading } from "@/components/PageHeading";
-import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
-import { formatParkWhen } from "@/lib/format";
+import { markExpiredEvents } from "@/lib/events";
+import { eventDisplayStatus } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { cancelEvent } from "./actions";
 
-const FILTERS = ["all", "draft", "published", "cancelled"] as const;
+const FILTERS = ["all", "draft", "published"] as const;
 
 export default async function OfficerEventsPage({
   searchParams,
@@ -15,16 +16,29 @@ export default async function OfficerEventsPage({
   searchParams: Promise<{ status?: string; error?: string }>;
 }) {
   const params = await searchParams;
+  if (params.status === "cancelled") redirect("/officer/events/history");
   const status = FILTERS.includes(params.status as (typeof FILTERS)[number]) ? params.status! : "all";
   const { supabase } = await requireUser(["conservation_officer"]);
   const { locale, t } = await getCopy();
+  await markExpiredEvents(supabase);
 
-  let request = supabase
+  const { data, error } = await supabase
     .from("events")
     .select("uuid, id, title, location_name, starts_at, ends_at, status")
     .order("starts_at");
-  if (status !== "all") request = request.eq("status", status);
-  const { data, error } = await request;
+
+  const current = ((data ?? []) as EventListItem[]).filter((item) => {
+    const shown = eventDisplayStatus(item.status, item.starts_at, item.ends_at);
+    if (shown === "cancelled" || shown === "expired") return false;
+    if (status === "all") return true;
+    return item.status === status;
+  });
+
+  const filters = [
+    { value: "all", label: t.all, href: "/officer/events" },
+    { value: "draft", label: t.draft, href: "/officer/events?status=draft" },
+    { value: "published", label: t.published, href: "/officer/events?status=published" },
+  ];
 
   return (
     <main className="mx-auto max-w-5xl px-4 pb-8">
@@ -32,55 +46,34 @@ export default async function OfficerEventsPage({
         backHref="/dashboard"
         backLabel={t.backPage}
         title={t.events}
-        extra={<Link className="btn" href="/officer/events/new">{t.addEvent}</Link>}
+        extra={
+          <div className="flex flex-wrap items-center gap-3">
+            <Link className="rounded-full border border-emerald-950/15 bg-white px-3 py-1.5 text-sm" href="/officer/events/history">{t.history}</Link>
+            <Link className="btn" href="/officer/events/new">{t.addEvent}</Link>
+          </div>
+        }
       />
       <p className="mt-4 text-sm text-neutral-600">{t.eventsIntro}</p>
       {(error || params.error) && (
         <p className="mt-3 text-sm text-red-700">{params.error || error?.message}</p>
       )}
-      <form className="mt-4 flex flex-wrap gap-2" action="/officer/events">
-        <select className="rounded border px-2 py-1" name="status" defaultValue={status}>
-          <option value="all">{t.all}</option>
-          <option value="draft">{t.draft}</option>
-          <option value="published">{t.published}</option>
-          <option value="cancelled">{t.cancelled}</option>
-        </select>
-        <button className="btn" type="submit">{t.filter}</button>
-      </form>
-      <ul className="mt-4 divide-y surface">
-        {(data ?? []).map((item) => (
-          <li key={item.uuid} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <p className="font-medium">{item.id} · {item.title}</p>
-              <p className="text-sm text-neutral-600">
-                {formatParkWhen(item.starts_at, item.ends_at, locale)}
-                {item.location_name ? ` · ${item.location_name}` : ""}
-                {" · "}
-                <StatusBadge status={item.status} />
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Link className="inline-flex items-center rounded border px-3 py-1 text-sm" href={`/officer/events/${item.uuid}`}>
-                {t.edit}
-              </Link>
-              {item.status !== "cancelled" && (
-                <ConfirmDelete
-                  action={cancelEvent}
-                  id={item.uuid}
-                  next="/officer/events"
-                  label={t.cancelEvent}
-                  title={t.cancelEventTitle}
-                  message={`${item.id} · ${item.title}. ${t.cancelEventText}`}
-                  confirmLabel={t.confirm}
-                  cancelLabel={t.cancel}
-                  className="rounded border border-red-300 px-3 py-1 text-sm text-red-800"
-                />
-              )}
-            </div>
-          </li>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {filters.map((filter) => (
+          <Link
+            key={filter.value}
+            href={filter.href}
+            className={status === filter.value ? "btn" : "rounded-full border border-emerald-950/15 bg-white px-3 py-1.5 text-sm"}
+          >
+            {filter.label}
+          </Link>
         ))}
-      </ul>
-      {!error && (data ?? []).length === 0 && <p className="mt-4 text-sm text-neutral-500">{t.noEvents}</p>}
+      </div>
+      <div className="mt-4 space-y-3">
+        {current.map((item) => (
+          <EventCard key={item.uuid} item={item} locale={locale} t={t} next="/officer/events" cancelAction={cancelEvent} />
+        ))}
+      </div>
+      {!error && current.length === 0 && <p className="mt-4 text-sm text-neutral-500">{t.noEvents}</p>}
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import { EventCarousel } from "@/components/EventCarousel";
-import { formatParkWhen } from "@/lib/format";
+import { eventHasFinished, formatParkWhen } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,8 +14,9 @@ export async function UpcomingEvents({ limit = 8 }: { limit?: number }) {
   const { data, error } = result;
 
   const unavailable = error?.code === "PGRST205" || /public_events|schema cache/i.test(error?.message ?? "");
+  const upcoming = (data ?? []).filter((item) => !eventHasFinished(item.starts_at, item.ends_at));
 
-  if (error || (data ?? []).length === 0) {
+  if (error || upcoming.length === 0) {
     return (
       <section className="mt-8">
         <h2 className="text-xl font-semibold">{t.upcomingEvents}</h2>
@@ -33,7 +34,7 @@ export async function UpcomingEvents({ limit = 8 }: { limit?: number }) {
     <EventCarousel
       label={t.upcomingEvents}
       viewLabel={t.viewEvent}
-      slides={(data ?? []).map((item) => ({
+      slides={upcoming.map((item) => ({
         id: item.id,
         title: item.title,
         when: formatParkWhen(item.starts_at, item.ends_at, locale),

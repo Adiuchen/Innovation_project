@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackPage } from "@/components/BackPage";
 import { PlantView } from "@/components/PlantView";
+import { getSessionProfile, isStaffRole } from "@/lib/auth";
 import { getCopy } from "@/lib/i18n";
+import { plantVisibility } from "@/lib/plant-access";
 import { createClient } from "@/lib/supabase/server";
 
 type PublicPlantRow = {
@@ -15,6 +17,7 @@ type PublicPlantRow = {
   genus?: string | null;
   conservation_status?: string | null;
   plant_id?: string | null;
+  record_uuid?: string | null;
   location_name?: string | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -32,18 +35,22 @@ function plantCodePrefix(code: string) {
 async function resolveCanonicalTag(
   supabase: Awaited<ReturnType<typeof createClient>>,
   code: string,
-): Promise<{ qr_code: string; status: string } | null> {
+): Promise<{ qr_code: string; status: string; visibility: "ordinary" | "rare" } | null> {
   const rpc = await supabase.rpc("resolve_plant_tag", { code });
   if (!rpc.error) {
     const row = Array.isArray(rpc.data) ? rpc.data[0] : null;
     if (row && typeof row.status === "string") {
-      return { qr_code: typeof row.qr_code === "string" && row.qr_code ? row.qr_code : code, status: row.status };
+      return {
+        qr_code: typeof row.qr_code === "string" && row.qr_code ? row.qr_code : code,
+        status: row.status,
+        visibility: plantVisibility(row.visibility),
+      };
     }
   }
 
   const byQr = await supabase.from("plant_records").select("qr_code, status").eq("qr_code", code).maybeSingle();
   if (!byQr.error && byQr.data && typeof byQr.data.status === "string") {
-    return { qr_code: byQr.data.qr_code || code, status: byQr.data.status };
+    return { qr_code: byQr.data.qr_code || code, status: byQr.data.status, visibility: "ordinary" };
   }
 
   const prefix = plantCodePrefix(code);
@@ -59,7 +66,7 @@ async function resolveCanonicalTag(
       return local.startsWith(prefix) || uuid.startsWith(prefix);
     });
     if (hit && typeof hit.status === "string") {
-      return { qr_code: hit.qr_code || code, status: hit.status };
+      return { qr_code: hit.qr_code || code, status: hit.status, visibility: "ordinary" };
     }
   }
 
@@ -73,7 +80,7 @@ async function loadApprovedRecordAsPlant(
   const { data, error } = await supabase
     .from("plant_records")
     .select(
-      "id, plant_name, life_stage, location_name, latitude, longitude, height_m, health_status, recorded_at, status, qr_code, species(scientific_name, common_name, local_name, family, genus, conservation_status), profiles!plant_records_botanist_id_fkey(name)",
+      "uuid, id, plant_name, life_stage, location_name, latitude, longitude, height_m, health_status, recorded_at, status, qr_code, species(scientific_name, common_name, local_name, family, genus, conservation_status), profiles!plant_records_botanist_id_fkey(name)",
     )
     .eq("qr_code", code)
     .eq("status", "approved")
@@ -92,6 +99,7 @@ async function loadApprovedRecordAsPlant(
     genus: species?.genus ?? null,
     conservation_status: species?.conservation_status ?? null,
     plant_id: data.id,
+    record_uuid: data.uuid,
     location_name: data.location_name,
     latitude: data.latitude,
     longitude: data.longitude,
@@ -113,6 +121,22 @@ export default async function PublicPlantPage({
 
   const resolved = await resolveCanonicalTag(supabase, code);
   const lookupCode = resolved?.qr_code || code;
+
+  if (resolved?.visibility === "rare") {
+    const { profile } = await getSessionProfile();
+    const staff = profile?.status === "active" && isStaffRole(profile.role);
+    if (!staff) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 pt-4 pb-16">
+          <BackPage href="/" label={t.backPage} />
+          <section className="mt-10 space-y-4">
+            <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">{t.plantClosedTitle}</h1>
+            <p className="max-w-xl text-base leading-7 text-neutral-600">{t.plantClosedBody}</p>
+          </section>
+        </main>
+      );
+    }
+  }
 
   const { data: published } = await supabase
     .from("public_plant_pages")
@@ -151,10 +175,18 @@ export default async function PublicPlantPage({
   }
 
   const photoCode = published?.qr_code || lookupCode;
-  const { data: photos } = await supabase
+  const { data: publicPhotos } = await supabase
     .from("public_plant_photos")
     .select("id, storage_path, caption")
     .eq("qr_code", photoCode);
+  const ownedPhotos = plant.record_uuid
+    ? await supabase
+        .from("plant_photos")
+        .select("id, storage_path, caption")
+        .eq("plant_record_id", plant.record_uuid)
+        .is("hidden_at", null)
+    : { data: null };
+  const photos = publicPhotos?.length ? publicPhotos : ownedPhotos.data;
 
   const { data: species } = plant.scientific_name
     ? await supabase

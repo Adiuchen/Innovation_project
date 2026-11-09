@@ -1,5 +1,6 @@
 import { PageHeading } from "@/components/PageHeading";
 import { SpeciesMap, type MapPoint } from "@/components/SpeciesMap";
+import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
 import { getCopy, statusText } from "@/lib/i18n";
 
@@ -40,12 +41,18 @@ export default async function MapPage() {
           const species = Array.isArray(record.species) ? record.species[0] : record.species;
           const mapUrl = `https://www.openstreetmap.org/?mlat=${record.latitude}&mlon=${record.longitude}#map=15/${record.latitude}/${record.longitude}`;
           return (
-            <li key={record.uuid} className="px-4 py-3 text-sm">
-              <p className="font-medium">{record.id} · {record.plant_name || species?.scientific_name || t.unidentified}</p>
-              <p>
-                {record.location_name || t.noPlaceName} · {record.latitude}, {record.longitude} · {statusText(record.status, t)}
-              </p>
-              <a href={mapUrl} target="_blank" rel="noreferrer">{t.openMap}</a>
+            <li key={record.uuid} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-sm">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{record.id} · {record.plant_name || species?.scientific_name || t.unidentified}</p>
+                  <StatusBadge status={record.status} />
+                </div>
+                <p className="mt-1 text-neutral-600">
+                  {record.location_name || t.noPlaceName}
+                  <span className="tabular-nums"> · {record.latitude}, {record.longitude}</span>
+                </p>
+              </div>
+              <a className="inline-flex h-9 shrink-0 items-center rounded-lg border border-forest bg-white px-3 text-sm font-semibold text-forest" href={mapUrl} target="_blank" rel="noreferrer">{t.openMap}</a>
             </li>
           );
         })}

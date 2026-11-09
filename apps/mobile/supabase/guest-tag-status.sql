@@ -27,6 +27,8 @@ revoke all on function public.plant_tag_progress(text) from public;
 grant execute on function public.plant_tag_progress(text) to anon, authenticated;
 
 -- Resolve a scanned/printed code to the canonical qr_code + status.
+-- rare-plants.sql replaces this function so it also returns visibility.
+-- After that file has been run, run rare-plants.sql again instead of this one.
 -- Covers offline tags derived from local_id when approve minted plant-{server_uuid} instead.
 create or replace function public.resolve_plant_tag(code text)
 returns table(qr_code text, status text)

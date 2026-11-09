@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/PageHeading";
 import { PendingDrafts } from "@/components/PendingDrafts";
 import { requireUser } from "@/lib/auth";
 import { getCopy, statusText } from "@/lib/i18n";
+import { statusTone } from "@/lib/status-tone";
 
 export default async function BotanistHome({
   searchParams,
@@ -64,20 +65,33 @@ export default async function BotanistHome({
       {(error || actionError) && <p className="shrink-0 text-sm text-red-700">{error?.message || actionError}</p>}
       <PendingDrafts t={t} />
       {sorted.some((record) => record.status === "needs_revision" || record.status === "rejected") && (
-        <section id="notices" className="mt-4 max-h-40 shrink-0 overflow-y-auto rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <h2 className="font-medium">{t.notices}</h2>
-          <ul className="mt-2 space-y-3 text-sm">
+        <section id="notices" className="mt-4 shrink-0">
+          <h2 className="text-sm font-medium text-neutral-500">{t.notices}</h2>
+          <ul className="mt-2 grid max-h-56 gap-2 overflow-y-auto">
             {sorted.filter((record) => record.status === "needs_revision" || record.status === "rejected").map((record) => {
               const species = Array.isArray(record.species) ? record.species[0] : record.species;
+              const name = record.plant_name || species?.scientific_name || t.unidentified;
+              const detail = record.review_note
+                ? `${t.officerNote}: ${record.review_note}`
+                : record.status === "rejected"
+                  ? t.noticeRejected
+                  : t.noticeRevision;
               return (
                 <li key={record.uuid}>
-                  <Link className="font-medium underline" href={`/botanist/${record.uuid}`}>
-                    {record.id} · {record.plant_name || species?.scientific_name || t.unidentified}
+                  <Link
+                    href={`/botanist/${record.uuid}`}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-neutral-900">
+                        {record.id} · {name}
+                      </span>
+                      <span className="mt-1 block text-sm leading-5 text-neutral-600">{detail}</span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(record.status)}`}>
+                      {statusText(record.status, t)}
+                    </span>
                   </Link>
-                  <p className="text-neutral-700">
-                    {record.status === "rejected" ? t.noticeRejected : t.noticeRevision}
-                  </p>
-                  {record.review_note && <p>{t.officerNote}: {record.review_note}</p>}
                 </li>
               );
             })}

@@ -2,17 +2,19 @@
 
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { choiceFromForm } from "@/lib/field-choices";
+import { choiceFromForm, plantRecordProblems } from "@/lib/field-choices";
 import { numberOrNull, textOrNull } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { PHOTO_TOO_LARGE, PHOTO_WRONG_TYPE, uploadPlantPhoto } from "@/lib/photos";
+import { plantVisibility, visibilitySaveError } from "@/lib/plant-access";
 import { resolveSpeciesId } from "@/lib/species";
 
 export async function createRecord(formData: FormData) {
   const { supabase, user } = await requireUser(["botanist"]);
   const status = String(formData.get("status") || "draft");
-  if (!textOrNull(formData.get("plant_name"))) {
-    redirect(`/botanist/new?error=${encodeURIComponent("Enter a plant name.")}`);
+  const problem = plantRecordProblems(formData, { requirePhoto: true });
+  if (problem) {
+    redirect(`/botanist/new?error=${encodeURIComponent(problem)}`);
   }
 
   const species = await speciesFromForm(supabase, user.id, formData);
@@ -42,6 +44,7 @@ export async function createRecord(formData: FormData) {
       latitude: numberOrNull(formData.get("latitude")),
       longitude: numberOrNull(formData.get("longitude")),
       qr_code: qrCode,
+      visibility: plantVisibility(formData.get("visibility")),
       status: submitted ? "submitted" : "draft",
       sync_status: "synced",
     })
@@ -49,7 +52,7 @@ export async function createRecord(formData: FormData) {
     .single();
 
   if (error || !data) {
-    redirect(`/botanist/new?error=${encodeURIComponent(error?.message ?? "Could not save")}`);
+    redirect(`/botanist/new?error=${encodeURIComponent(visibilitySaveError(error?.message ?? "Could not save"))}`);
   }
 
   const photoError = await saveRecordPhoto(supabase, user.id, data.uuid, formData);
@@ -132,8 +135,9 @@ export async function resubmit(formData: FormData) {
   if (!existing || !["draft", "needs_revision", "rejected"].includes(existing.status)) {
     redirect(`/botanist/${id}?error=${encodeURIComponent("This record can no longer be edited.")}`);
   }
-  if (!textOrNull(formData.get("plant_name"))) {
-    redirect(`/botanist/${id}?error=${encodeURIComponent("Enter a plant name.")}`);
+  const problem = plantRecordProblems(formData);
+  if (problem) {
+    redirect(`/botanist/${id}?error=${encodeURIComponent(problem)}`);
   }
 
   const species = await speciesFromForm(supabase, user.id, formData);
@@ -158,6 +162,7 @@ export async function resubmit(formData: FormData) {
       location_name: textOrNull(formData.get("location_name")),
       latitude: numberOrNull(formData.get("latitude")),
       longitude: numberOrNull(formData.get("longitude")),
+      visibility: plantVisibility(formData.get("visibility")),
       status: "submitted",
       ...(existing.qr_code ? {} : { qr_code: `plant-${seed.slice(0, 8)}` }),
     })
@@ -166,7 +171,7 @@ export async function resubmit(formData: FormData) {
     .in("status", ["draft", "needs_revision", "rejected"]);
 
   if (error) {
-    redirect(`/botanist/${id}?error=${encodeURIComponent(error.message)}`);
+    redirect(`/botanist/${id}?error=${encodeURIComponent(visibilitySaveError(error.message))}`);
   }
   redirect("/botanist");
 }

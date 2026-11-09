@@ -20,7 +20,7 @@ function officerReturnPath(value: FormDataEntryValue | null) {
 }
 
 export async function reviewRecord(formData: FormData) {
-  const { supabase } = await requireUser(["conservation_officer"]);
+  const { supabase, user } = await requireUser(["conservation_officer"]);
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   const destination = officerReturnPath(formData.get("next"));
@@ -31,7 +31,7 @@ export async function reviewRecord(formData: FormData) {
 
   const { data: record } = await supabase
     .from("plant_records")
-    .select("status, qr_code, local_id")
+    .select("id, status, qr_code, local_id")
     .eq("uuid", id)
     .maybeSingle();
   if (!record || (record.status !== "submitted" && record.status !== "needs_revision")) {
@@ -47,11 +47,20 @@ export async function reviewRecord(formData: FormData) {
       : null) ||
     (status === "approved" ? `plant-${id.slice(0, 8)}` : record.qr_code);
 
+  const note = textOrNull(formData.get("review_note"));
+  if ((status === "needs_revision" || status === "rejected") && !note) {
+    const { t } = await getCopy();
+    const joiner = destination.includes("?") ? "&" : "?";
+    redirect(`${destination}${joiner}error=${encodeURIComponent(t.feedbackMissing)}`);
+  }
+
   const { error } = await supabase
     .from("plant_records")
     .update({
       status,
-      review_note: textOrNull(formData.get("review_note")),
+      review_note: note,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
       qr_code: qrCode,
     })
     .eq("uuid", id)
@@ -61,7 +70,16 @@ export async function reviewRecord(formData: FormData) {
     const joiner = destination.includes("?") ? "&" : "?";
     redirect(`${destination}${joiner}error=${encodeURIComponent(error.message)}`);
   }
-  redirect(destination);
+  redirect(withReviewNotice(destination, status, typeof record.id === "string" ? record.id : ""));
+}
+
+function withReviewNotice(path: string, done: string, plantId: string) {
+  const [pathname, search = ""] = path.split("?");
+  const params = new URLSearchParams(search);
+  params.set("done", done);
+  if (/^[A-Za-z0-9_-]{1,24}$/.test(plantId)) params.set("plant", plantId);
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 function speciesPayload(formData: FormData) {

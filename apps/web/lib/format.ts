@@ -64,6 +64,19 @@ export function formatParkTimeDate(value: string, locale: "en" | "ms") {
   return `${time}, ${day}`;
 }
 
+export function eventHasFinished(startsAt: string, endsAt: string | null, now = Date.now()) {
+  const start = Date.parse(startsAt);
+  if (!Number.isFinite(start)) return false;
+  const end = endsAt ? Date.parse(endsAt) : start + 24 * 60 * 60 * 1000;
+  return Number.isFinite(end) && end < now;
+}
+
+export function eventDisplayStatus(status: string, startsAt: string, endsAt: string | null) {
+  if (status === "cancelled") return "cancelled";
+  if (status === "expired" || (status === "published" && eventHasFinished(startsAt, endsAt))) return "expired";
+  return status;
+}
+
 export function formatParkWhen(startsAt: string, endsAt: string | null, locale: "en" | "ms") {
   const tag = locale === "ms" ? "ms-MY" : "en-MY";
   const start = new Date(startsAt);

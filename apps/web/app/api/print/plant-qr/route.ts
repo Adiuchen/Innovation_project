@@ -6,6 +6,34 @@ import { printPlantQr } from "@/lib/printer";
 
 export const runtime = "nodejs";
 
+function privateIpv4(value: unknown) {
+  if (typeof value !== "string" || !/^(\d{1,3}\.){3}\d{1,3}$/.test(value)) return null;
+  const parts = value.split(".").map((part) => Number(part));
+  if (parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  const [first, second] = parts;
+  const local = first === 10 || (first === 192 && second === 168) || (first === 172 && second >= 16 && second <= 31);
+  return local ? value : null;
+}
+
+function pageOrigin(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (url.hostname !== "localhost" && !privateIpv4(url.hostname)) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function requestedPort(value: unknown) {
+  if (value == null || value === "") return undefined;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return port;
+}
+
 function reachableHost(host: string) {
   const bracket = host.match(/^\[([^\]]+)\](?::(\d+))?$/);
   const name = bracket ? bracket[1] : host.replace(/:\d+$/, "");
@@ -83,16 +111,25 @@ export async function POST(request: Request) {
     labelSource = { qr_code: record.qr_code, plant_id: record.id, plant_name: record.plant_name };
   }
 
+  const printerHost = privateIpv4(body?.host);
+  const printerPort = requestedPort(body?.port);
+  if ((body?.host != null && body.host !== "" && !printerHost) || printerPort === null) {
+    return NextResponse.json({ error: "Enter a printer address on this local network." }, { status: 400 });
+  }
+
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "localhost:3000";
   const proto = request.headers.get("x-forwarded-proto") ?? "http";
+  const origin = pageOrigin(body?.pageUrl) ?? `${proto}://${reachableHost(host)}`;
   const label = String(labelSource.plant_id || labelSource.plant_name || labelSource.qr_code).slice(0, 32);
 
   try {
-    await printPlantQr({
-      url: `${proto}://${reachableHost(host)}/p/${labelSource.qr_code}`,
+    const bytes = await printPlantQr({
+      url: `${origin}/p/${labelSource.qr_code}`,
       label,
+      host: printerHost ?? undefined,
+      port: printerPort,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, bytes }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "The printer did not print.";
     return NextResponse.json({ error: message }, { status: 500 });

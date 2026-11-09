@@ -20,7 +20,7 @@ function cards(t: Copy): Record<Profile["role"], { href: string; title: string; 
       { href: "/officer/events", title: t.events, text: t.eventsText },
     ],
     administrator: [
-      { href: "/admin", title: t.users, text: t.usersText },
+      { href: "/admin", title: t.manageUsers, text: t.manageUsersText },
       { href: "/admin/events", title: t.events, text: t.adminEventsText },
       { href: "/admin/iot", title: t.iot, text: t.iotText },
     ],

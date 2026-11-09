@@ -31,11 +31,7 @@ export async function SiteHeader() {
               )}
               <ProfilePanel profile={profile} locale={locale} t={t} roleLabel={statusText(profile.role, t)} notices={notices} />
             </>
-          ) : (
-            <Link href="/" className="rounded-full px-3 py-1.5 hover:bg-emerald-50">
-              {t.search}
-            </Link>
-          )}
+          ) : null}
           {!profile && (
             <Link href="/login" className="btn ml-1">
               {t.login}

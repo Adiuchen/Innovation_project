@@ -55,6 +55,8 @@ export type Draft = {
   flower_fruit_traits: string;
   health_status: string;
   other_traits: string;
+  /** ordinary stays on the public page. rare is visible to staff only. */
+  visibility: "ordinary" | "rare";
   photo_uri: string | null;
   photo_caption: string;
   photo_remote_url: string | null;
@@ -87,6 +89,7 @@ export type CachedRecord = {
   health_status: string | null;
   other_traits: string | null;
   qr_code: string | null;
+  visibility: "ordinary" | "rare";
   review_note: string | null;
   recorded_at: string | null;
   photos: PhotoRef[];
@@ -121,6 +124,7 @@ export type FieldInput = {
   flower_fruit_traits: string;
   health_status: string;
   other_traits: string;
+  visibility: "ordinary" | "rare";
   /** First photo, kept for older screens. `photos` holds every photo. */
   photo_uri: string | null;
   photo_caption: string;

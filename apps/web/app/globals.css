@@ -120,6 +120,16 @@
     display: none;
   }
 
+  .scroll-visible {
+    scrollbar-width: thin;
+  }
+
+  .scroll-visible::-webkit-scrollbar {
+    display: block;
+    height: 8px;
+    width: 8px;
+  }
+
   .event-banner-in {
     animation: event-banner-in 0.45s ease;
   }

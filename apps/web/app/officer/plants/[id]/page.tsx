@@ -3,6 +3,7 @@ import { BackPage } from "@/components/BackPage";
 import { PlantView } from "@/components/PlantView";
 import { requireUser } from "@/lib/auth";
 import { getCopy } from "@/lib/i18n";
+import { loadRarePlant } from "@/lib/staff-plants";
 
 export default async function OfficerApprovedPlantPage({
   params,
@@ -13,18 +14,20 @@ export default async function OfficerApprovedPlantPage({
   const { supabase } = await requireUser(["conservation_officer"]);
   const { locale, t } = await getCopy();
   const plantId = decodeURIComponent(id).trim().toUpperCase();
-  const { data: plant } = await supabase
+  const { data: published } = await supabase
     .from("public_plant_pages")
     .select("*")
     .eq("plant_id", plantId)
     .maybeSingle();
+  const hidden = published ? null : await loadRarePlant(supabase, plantId);
+  const plant = published ?? hidden?.plant ?? null;
 
   if (!plant) notFound();
 
-  const { data: photos } = await supabase
-    .from("public_plant_photos")
-    .select("id, storage_path, caption")
-    .eq("qr_code", plant.qr_code);
+  const { data: publicPhotos } = published
+    ? await supabase.from("public_plant_photos").select("id, storage_path, caption").eq("qr_code", plant.qr_code)
+    : { data: null };
+  const photos = publicPhotos ?? hidden?.photos ?? [];
 
   return (
     <main className="mx-auto max-w-5xl px-4 pt-4 pb-8">

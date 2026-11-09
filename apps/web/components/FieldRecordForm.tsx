@@ -137,6 +137,7 @@ export function FieldRecordForm({
             className="mt-1 w-full rounded-lg border px-3 py-2"
             name="photo"
             type="file"
+            required
             accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
             capture="environment"
             onChange={(event) => {
@@ -164,30 +165,31 @@ export function FieldRecordForm({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt={t.photoUrl} className="max-h-80 rounded-lg border" />
         )}
-        <Field name="photo_caption" label={t.photoCaption} />
+        <Field name="photo_caption" label={t.photoCaption} required />
       </section>
       <section className="surface space-y-3 p-4">
         <Field name="plant_name" label={t.plantName} required />
-        <SpeciesSelect key={`species-${speciesFormKey}`} t={t} species={choices} />
+        <AccessField t={t} />
+        <SpeciesSelect key={`species-${speciesFormKey}`} t={t} species={choices} required />
         <div key={`traits-${speciesFormKey}`} className="space-y-3">
-          <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} otherLabel={t.otherDetail} />
-          <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} otherLabel={t.otherDetail} />
-          <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} otherLabel={t.otherDetail} />
-          <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} otherLabel={t.otherDetail} />
+          <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} otherLabel={t.otherDetail} required />
+          <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} otherLabel={t.otherDetail} required />
+          <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} otherLabel={t.otherDetail} required />
+          <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} otherLabel={t.otherDetail} required />
         </div>
-        <Field name="other_traits" label={t.otherTraits} />
+        <Field name="other_traits" label={t.otherTraits} required />
       </section>
       <section className="surface space-y-3 p-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field name="latitude" label={t.latitude} />
-          <Field name="longitude" label={t.longitude} />
-          <Field name="height_m" label={t.height} />
-          <Field name="trunk_diameter_cm" label={t.trunk} />
+          <Field name="latitude" label={t.latitude} required />
+          <Field name="longitude" label={t.longitude} required />
+          <Field name="height_m" label={t.height} required />
+          <Field name="trunk_diameter_cm" label={t.trunk} required />
         </div>
         <button className="rounded border px-3 py-1 text-sm" type="button" onClick={useMyLocation}>
           {t.useMyLocation}
         </button>
-        <Field name="location_name" label={t.placeName} />
+        <Field name="location_name" label={t.placeName} required />
       </section>
       <label className="block text-sm">
         {t.saveAs}
@@ -227,6 +229,19 @@ function photoMessage(error: string, t: Copy) {
   if (error === PHOTO_TOO_LARGE) return t.photoTooLarge;
   if (error === PHOTO_WRONG_TYPE) return t.photoType;
   return error;
+}
+
+function AccessField({ t, value }: { t: Copy; value?: string }) {
+  return (
+    <label className="block text-sm">
+      {t.plantAccess}
+      <select className="mt-1 w-full rounded-lg border px-3 py-2" name="visibility" defaultValue={value === "rare" ? "rare" : "ordinary"}>
+        <option value="ordinary">{t.ordinaryPlant}</option>
+        <option value="rare">{t.rarePlant}</option>
+      </select>
+      <span className="mt-1 block text-neutral-500">{t.plantAccessHint}</span>
+    </label>
+  );
 }
 
 function Field({ name, label, area, required }: { name: string; label: string; area?: boolean; required?: boolean }) {

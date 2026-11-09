@@ -62,6 +62,9 @@ export default async function RecordDetail({
       )}
       {record.review_note && <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm">{t.officerNote}: {record.review_note}</p>}
       {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {!editable && record.visibility === "rare" && (
+        <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm">{t.rarePlant}. {t.plantAccessHint}</p>
+      )}
       <div className="mt-4">
         <PlantView
           locale={locale}
@@ -101,19 +104,27 @@ export default async function RecordDetail({
         <form action={resubmit} className="mt-4 space-y-3">
           <input type="hidden" name="id" value={record.uuid} />
           <Input name="plant_name" label={t.plantName} defaultValue={record.plant_name} required />
-          <SpeciesSelect t={t} species={species ?? []} defaultValue={record.species_id ?? ""} compact />
+          <label className="block text-sm">
+            {t.plantAccess}
+            <select className="mt-1 w-full rounded-lg border px-3 py-2" name="visibility" defaultValue={record.visibility === "rare" ? "rare" : "ordinary"}>
+              <option value="ordinary">{t.ordinaryPlant}</option>
+              <option value="rare">{t.rarePlant}</option>
+            </select>
+            <span className="mt-1 block text-neutral-500">{t.plantAccessHint}</span>
+          </label>
+          <SpeciesSelect t={t} species={species ?? []} defaultValue={record.species_id ?? ""} compact required />
           <div className="grid grid-cols-2 gap-3">
-            <Input name="height_m" label={t.height} defaultValue={record.height_m} />
-            <Input name="trunk_diameter_cm" label={t.trunk} defaultValue={record.trunk_diameter_cm} />
-            <Input name="latitude" label={t.latitude} defaultValue={record.latitude} />
-            <Input name="longitude" label={t.longitude} defaultValue={record.longitude} />
+            <Input name="height_m" label={t.height} defaultValue={record.height_m} required />
+            <Input name="trunk_diameter_cm" label={t.trunk} defaultValue={record.trunk_diameter_cm} required />
+            <Input name="latitude" label={t.latitude} defaultValue={record.latitude} required />
+            <Input name="longitude" label={t.longitude} defaultValue={record.longitude} required />
           </div>
-          <Input name="location_name" label={t.placeName} defaultValue={record.location_name} />
-          <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} value={record.life_stage} otherLabel={t.otherDetail} />
-          <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} value={record.health_status} otherLabel={t.otherDetail} />
-          <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} value={record.leaf_traits} otherLabel={t.otherDetail} />
-          <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} value={record.flower_fruit_traits} otherLabel={t.otherDetail} />
-          <Input name="other_traits" label={t.otherTraits} defaultValue={record.other_traits} />
+          <Input name="location_name" label={t.placeName} defaultValue={record.location_name} required />
+          <ChoiceField name="life_stage" label={t.lifeStage} options={lifeStageOptions(t)} value={record.life_stage} otherLabel={t.otherDetail} required />
+          <ChoiceField name="health_status" label={t.health} options={healthOptions(t)} value={record.health_status} otherLabel={t.otherDetail} required />
+          <ChoiceField name="leaf_traits" label={t.leafTraits} options={leafOptions(t)} value={record.leaf_traits} otherLabel={t.otherDetail} required />
+          <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} value={record.flower_fruit_traits} otherLabel={t.otherDetail} required />
+          <Input name="other_traits" label={t.otherTraits} defaultValue={record.other_traits} required />
           <button className="btn" type="submit">{t.submitAgain}</button>
         </form>
       )}

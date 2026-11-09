@@ -157,6 +157,8 @@ async function migrateSchema(db: SQLite.SQLiteDatabase) {
   await ensureColumn(db, "drafts", "life_stage", "TEXT");
   await ensureColumn(db, "drafts", "photos_json", "TEXT");
   await ensureColumn(db, "drafts", "qr_code", "TEXT");
+  await ensureColumn(db, "drafts", "visibility", "TEXT");
+  await ensureColumn(db, "records", "visibility", "TEXT");
   await ensureColumn(db, "records", "plant_name", "TEXT");
   await ensureColumn(db, "records", "life_stage", "TEXT");
   await ensureColumn(db, "records", "qr_code", "TEXT");
@@ -199,8 +201,12 @@ function toSpecies(row: SpeciesRow): Species {
 }
 
 function toRecord(row: RecordRow): CachedRecord {
-  const { photos_json, ...rest } = row;
-  return { ...rest, photos: parsePhotos(photos_json) };
+  const { photos_json, visibility, ...rest } = row;
+  return {
+    ...rest,
+    visibility: visibility === "rare" ? "rare" : "ordinary",
+    photos: parsePhotos(photos_json),
+  };
 }
 
 export async function replaceSpecies(species: Species[]) {
@@ -243,11 +249,12 @@ export async function getSpecies(uuid: string) {
   return row ? toSpecies(row) : null;
 }
 
-type DraftRow = Omit<Draft, "plant_name" | "life_stage" | "photos" | "qr_code"> & {
+type DraftRow = Omit<Draft, "plant_name" | "life_stage" | "photos" | "qr_code" | "visibility"> & {
   plant_name: string | null;
   life_stage: string | null;
   photos_json: string | null;
   qr_code: string | null;
+  visibility: string | null;
 };
 
 function parseLocalPhotos(value: string | null): LocalPhoto[] {
@@ -261,7 +268,7 @@ function parseLocalPhotos(value: string | null): LocalPhoto[] {
 }
 
 function toDraft(row: DraftRow): Draft {
-  const { photos_json, ...rest } = row;
+  const { photos_json, visibility, ...rest } = row;
   let photos = parseLocalPhotos(photos_json);
   // Drafts saved before multiple photos were supported keep their single photo.
   if (photos.length === 0 && rest.photo_uri) {
@@ -279,6 +286,7 @@ function toDraft(row: DraftRow): Draft {
     plant_name: rest.plant_name ?? "",
     life_stage: rest.life_stage ?? "",
     qr_code: rest.qr_code ?? null,
+    visibility: visibility === "rare" ? "rare" : "ordinary",
     photos,
   };
 }
@@ -287,6 +295,7 @@ export async function saveDraft(draft: Draft) {
   const db = await database();
   // Hot reload can leave an old open handle; always confirm the column before write.
   await ensureColumn(db, "drafts", "qr_code", "TEXT");
+  await ensureColumn(db, "drafts", "visibility", "TEXT");
   const photos: LocalPhoto[] =
     draft.photos ??
     (draft.photo_uri
@@ -297,8 +306,8 @@ export async function saveDraft(draft: Draft) {
     `INSERT INTO drafts (
       local_id, user_id, remote_uuid, species_id, species_label, plant_name, life_stage, height_m, trunk_diameter_cm,
       latitude, longitude, location_name, leaf_traits, flower_fruit_traits, health_status,
-      other_traits, photo_uri, photo_caption, photo_remote_url, qr_code, status, saved_at, sync_error, photos_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      other_traits, photo_uri, photo_caption, photo_remote_url, qr_code, visibility, status, saved_at, sync_error, photos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(local_id) DO UPDATE SET
       user_id = excluded.user_id,
       remote_uuid = excluded.remote_uuid,
@@ -319,6 +328,7 @@ export async function saveDraft(draft: Draft) {
       photo_caption = excluded.photo_caption,
       photo_remote_url = excluded.photo_remote_url,
       qr_code = excluded.qr_code,
+      visibility = excluded.visibility,
       status = excluded.status,
       saved_at = excluded.saved_at,
       sync_error = excluded.sync_error,
@@ -343,6 +353,7 @@ export async function saveDraft(draft: Draft) {
     first?.caption ?? "",
     first?.remote_url ?? null,
     draft.qr_code,
+    draft.visibility === "rare" ? "rare" : "ordinary",
     draft.status,
     draft.saved_at,
     draft.sync_error,
@@ -394,8 +405,8 @@ export async function replaceRecords(userId: string, records: CachedRecord[]) {
         `INSERT INTO records (
           uuid, user_id, code, species_id, species_name, common_name, plant_name, life_stage, status, location_name,
           latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits,
-          health_status, other_traits, qr_code, review_note, recorded_at, photos_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          health_status, other_traits, qr_code, visibility, review_note, recorded_at, photos_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         item.uuid,
         item.user_id,
         item.code,
@@ -415,6 +426,7 @@ export async function replaceRecords(userId: string, records: CachedRecord[]) {
         item.health_status,
         item.other_traits,
         item.qr_code,
+        item.visibility === "rare" ? "rare" : "ordinary",
         item.review_note,
         item.recorded_at,
         JSON.stringify(item.photos),
@@ -441,12 +453,13 @@ export async function getRecord(uuid: string) {
 /** Cache one field record (e.g. after a staff QR scan) without wiping the botanist's list. */
 export async function upsertCachedRecord(item: CachedRecord) {
   const db = await database();
+  await ensureColumn(db, "records", "visibility", "TEXT");
   await db.runAsync(
     `INSERT INTO records (
       uuid, user_id, code, species_id, species_name, common_name, plant_name, life_stage, status, location_name,
       latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits,
-      health_status, other_traits, qr_code, review_note, recorded_at, photos_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      health_status, other_traits, qr_code, visibility, review_note, recorded_at, photos_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(uuid) DO UPDATE SET
       user_id = excluded.user_id,
       code = excluded.code,
@@ -466,6 +479,7 @@ export async function upsertCachedRecord(item: CachedRecord) {
       health_status = excluded.health_status,
       other_traits = excluded.other_traits,
       qr_code = excluded.qr_code,
+      visibility = excluded.visibility,
       review_note = excluded.review_note,
       recorded_at = excluded.recorded_at,
       photos_json = excluded.photos_json`,
@@ -488,6 +502,7 @@ export async function upsertCachedRecord(item: CachedRecord) {
     item.health_status,
     item.other_traits,
     item.qr_code,
+    item.visibility === "rare" ? "rare" : "ordinary",
     item.review_note,
     item.recorded_at,
     JSON.stringify(item.photos),

@@ -46,6 +46,7 @@ const emptyInput: FieldInput = {
   flower_fruit_traits: "",
   health_status: "",
   other_traits: "",
+  visibility: "ordinary",
   photo_uri: null,
   photo_caption: "",
   photos: [],
@@ -58,12 +59,30 @@ const STEPS = ["Plant", "Location", "Traits", "Photos", "Review"] as const;
 function stepProblem(step: number, input: FieldInput): string | null {
   if (step === 0) {
     if (!textOrNull(input.plant_name)) return "Enter a plant name.";
+    if (!input.species_id) return "Choose a species.";
+    if (!textOrNull(input.life_stage)) return "Choose a life stage.";
+    if (!textOrNull(input.height_m)) return "Enter height.";
     if (invalidNumber(input.height_m)) return "Height must be a number.";
+    if (!textOrNull(input.trunk_diameter_cm)) return "Enter trunk diameter.";
     if (invalidNumber(input.trunk_diameter_cm)) return "Trunk diameter must be a number.";
   }
   if (step === 1) {
+    if (!textOrNull(input.latitude) || !textOrNull(input.longitude)) return "Use my location first.";
     if (invalidNumber(input.latitude)) return "Latitude must be a number.";
     if (invalidNumber(input.longitude)) return "Longitude must be a number.";
+    if (!textOrNull(input.location_name)) return "Enter a place name.";
+  }
+  if (step === 2) {
+    if (!textOrNull(input.leaf_traits)) return "Choose leaf traits.";
+    if (!textOrNull(input.flower_fruit_traits)) return "Choose flower or fruit traits.";
+    if (!textOrNull(input.health_status)) return "Choose a health status.";
+    if (!textOrNull(input.other_traits)) return "Enter other traits.";
+  }
+  if (step === 3) {
+    if (input.photos.length === 0) return "Add a photo.";
+    if (input.photos.some((photo) => !photo.remote_url && !textOrNull(photo.caption))) {
+      return "Enter a caption for every photo.";
+    }
   }
   return null;
 }
@@ -307,17 +326,47 @@ export function RecordForm({
       {step === 0 && (
         <>
           <Field label="Plant name *" value={input.plant_name} onChangeText={(plant_name) => patch({ plant_name })} placeholder="Name used in the field" />
+          <View style={styles.choices}>
+            <Text style={styles.pickerLabel}>Who can see this plant</Text>
+            <View style={styles.chips}>
+              {(
+                [
+                  ["ordinary", "Ordinary"],
+                  ["rare", "Rare"],
+                ] as const
+              ).map(([value, label]) => {
+                const selected = input.visibility === value;
+                return (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="button"
+                    onPress={() => patch({ visibility: value })}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      selected && styles.choiceOn,
+                      pressed && (selected ? styles.chipPressedOn : styles.chipPressed),
+                    ]}
+                  >
+                    <Text style={[styles.chipText, selected && styles.choiceTextOn]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.accuracy}>
+              Rare plants stay hidden from the public. Staff can still open and update the record.
+            </Text>
+          </View>
           <Pressable accessibilityRole="button" style={styles.picker} onPress={() => setPickerOpen(true)}>
-            <Text style={styles.pickerLabel}>Species</Text>
-            <Text style={styles.pickerValue}>{input.species_label || "Not identified yet"}</Text>
+            <Text style={styles.pickerLabel}>Species *</Text>
+            <Text style={styles.pickerValue}>{input.species_label || "Choose a species"}</Text>
           </Pressable>
-          <ChoiceField label="Life stage" value={input.life_stage} options={lifeStageChoices} onChange={(life_stage) => patch({ life_stage })} />
+          <ChoiceField label="Life stage *" value={input.life_stage} options={lifeStageChoices} onChange={(life_stage) => patch({ life_stage })} />
           <View style={styles.row}>
             <View style={styles.half}>
-              <Field label="Height (m)" value={input.height_m} onChangeText={(height_m) => patch({ height_m })} keyboardType="decimal-pad" />
+              <Field label="Height (m) *" value={input.height_m} onChangeText={(height_m) => patch({ height_m })} keyboardType="decimal-pad" />
             </View>
             <View style={styles.half}>
-              <Field label="Trunk diameter (cm)" value={input.trunk_diameter_cm} onChangeText={(trunk_diameter_cm) => patch({ trunk_diameter_cm })} keyboardType="decimal-pad" />
+              <Field label="Trunk diameter (cm) *" value={input.trunk_diameter_cm} onChangeText={(trunk_diameter_cm) => patch({ trunk_diameter_cm })} keyboardType="decimal-pad" />
             </View>
           </View>
         </>
@@ -332,30 +381,30 @@ export function RecordForm({
           ) : null}
           <View style={styles.row}>
             <View style={styles.half}>
-              <Field label="Latitude" value={input.latitude} editable={false} placeholder="—" />
+              <Field label="Latitude *" value={input.latitude} editable={false} placeholder="—" />
             </View>
             <View style={styles.half}>
-              <Field label="Longitude" value={input.longitude} editable={false} placeholder="—" />
+              <Field label="Longitude *" value={input.longitude} editable={false} placeholder="—" />
             </View>
           </View>
           {accuracy != null && <Text style={styles.accuracy}>GPS accuracy about {Math.round(accuracy)} m</Text>}
-          <Field label="Place name" value={input.location_name} onChangeText={(location_name) => patch({ location_name })} placeholder="Trail, cave mouth, plot" />
+          <Field label="Place name *" value={input.location_name} onChangeText={(location_name) => patch({ location_name })} placeholder="Trail, cave mouth, plot" />
         </>
       )}
 
       {step === 2 && (
         <>
-          <ChoiceField label="Leaf traits" value={input.leaf_traits} options={leafChoices} onChange={(leaf_traits) => patch({ leaf_traits })} />
-          <ChoiceField label="Flower or fruit" value={input.flower_fruit_traits} options={flowerChoices} onChange={(flower_fruit_traits) => patch({ flower_fruit_traits })} />
-          <ChoiceField label="Health" value={input.health_status} options={healthChoices} onChange={(health_status) => patch({ health_status })} />
-          <Field label="Other traits" value={input.other_traits} onChangeText={(other_traits) => patch({ other_traits })} multiline />
+          <ChoiceField label="Leaf traits *" value={input.leaf_traits} options={leafChoices} onChange={(leaf_traits) => patch({ leaf_traits })} />
+          <ChoiceField label="Flower or fruit *" value={input.flower_fruit_traits} options={flowerChoices} onChange={(flower_fruit_traits) => patch({ flower_fruit_traits })} />
+          <ChoiceField label="Health *" value={input.health_status} options={healthChoices} onChange={(health_status) => patch({ health_status })} />
+          <Field label="Other traits *" value={input.other_traits} onChangeText={(other_traits) => patch({ other_traits })} multiline />
         </>
       )}
 
       {step === 3 && (
         <>
           <Text style={styles.pickerLabel}>
-            Photographs{input.photos.length > 0 ? ` (${input.photos.length})` : ""}
+            Photographs *{input.photos.length > 0 ? ` (${input.photos.length})` : ""}
           </Text>
           {input.photos.map((photo, index) => {
             // In revise mode, photos already in the central database cannot be removed or re-captioned here.
@@ -370,7 +419,7 @@ export function RecordForm({
                 ) : (
                   <>
                     <Field
-                      label={`Photo ${index + 1} caption`}
+                      label={`Photo ${index + 1} caption *`}
                       value={photo.caption}
                       onChangeText={(caption) => updatePhoto(photo.id, { caption })}
                       placeholder="Leaf, flower, bark, whole plant…"
@@ -406,6 +455,7 @@ export function RecordForm({
         <View style={styles.review}>
           <ReviewSection title="Plant" onEdit={() => goTo(0)}>
             <ReviewRow label="Plant name" value={input.plant_name} />
+            <ReviewRow label="Access" value={input.visibility === "rare" ? "Rare — staff only" : "Ordinary — public"} />
             <ReviewRow label="Species" value={input.species_label || "Not identified yet"} />
             <ReviewRow label="Life stage" value={choiceLabel(input.life_stage, lifeStageChoices)} />
             <ReviewRow label="Height" value={input.height_m ? `${input.height_m} m` : null} />
@@ -483,16 +533,7 @@ export function RecordForm({
             style={styles.search}
             autoFocus
           />
-          <Pressable
-            style={styles.speciesRow}
-            onPress={() => {
-              patch({ species_id: null, species_label: "" });
-              setPickerOpen(false);
-            }}
-          >
-            <Text style={styles.speciesName}>Not identified yet</Text>
-          </Pressable>
-            <FlatList
+          <FlatList
             style={styles.speciesList}
             data={filtered}
             keyExtractor={(item) => item.uuid}

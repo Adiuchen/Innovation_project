@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { BackPage } from "@/components/BackPage";
-import { formatParkWhen, parkStartParts } from "@/lib/format";
+import { eventHasFinished, formatParkWhen, parkStartParts } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,7 +18,7 @@ export default async function PublicEventPage({
   const event = withPhoto.error && /image_path/i.test(withPhoto.error.message)
     ? (await supabase.from("public_events").select(fields).eq("id", id).maybeSingle()).data
     : withPhoto.data;
-  if (!event) notFound();
+  if (!event || eventHasFinished(event.starts_at, event.ends_at)) notFound();
 
   const { locale, t } = await getCopy();
   const when = formatParkWhen(event.starts_at, event.ends_at, locale);
