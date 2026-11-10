@@ -5,7 +5,7 @@ import { loadEsp32Snapshot } from "@/lib/esp32";
 import { getCopy } from "@/lib/i18n";
 
 export async function OfficerIot() {
-  const { supabase } = await requireUser(["conservation_officer", "administrator"]);
+  const { supabase } = await requireUser(["botanist", "conservation_officer", "administrator"]);
   const { locale, t } = await getCopy();
   const { error, ...initial } = await loadEsp32Snapshot(supabase);
 
