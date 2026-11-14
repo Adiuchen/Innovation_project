@@ -31,12 +31,16 @@ export async function PlantView({
   t,
   locale,
   qrCode,
+  recordId,
+  canPrint = false,
 }: {
   plant: PlantDetails;
   photos: { id: string; storage_path: string; caption: string | null }[];
   t: Copy;
   locale: Locale;
   qrCode?: string | null;
+  recordId?: string | null;
+  canPrint?: boolean;
 }) {
   const gallery = photos.map((photo) => ({
     id: photo.id,
@@ -63,13 +67,16 @@ export async function PlantView({
             <p className="text-sm">
               {t.publicPage}: <Link href={qr.path}>{qr.path}</Link>
             </p>
-            <PrintQrButton
-              qrCode={qrCode}
-              label={t.printQr}
-              printingLabel={t.printingQr}
-              successLabel={t.qrPrinted}
-              failedLabel={t.qrPrintFailed}
-            />
+            {canPrint && (
+              <PrintQrButton
+                qrCode={qrCode}
+                recordId={recordId}
+                label={t.printQr}
+                printingLabel={t.printingQr}
+                successLabel={t.qrPrinted}
+                failedLabel={t.qrPrintFailed}
+              />
+            )}
           </div>
         )}
       </div>

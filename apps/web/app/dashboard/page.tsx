@@ -3,6 +3,7 @@ import { PrepareFieldCache } from "@/components/PrepareFieldCache";
 import { UpcomingEvents } from "@/components/UpcomingEvents";
 import { requireUser, type Profile } from "@/lib/auth";
 import { getCopy, statusText, type Copy } from "@/lib/i18n";
+import { updatesSchemaMissing } from "@/lib/plant-update";
 
 function cards(t: Copy): Record<Profile["role"], { href: string; title: string; text: string }[]> {
   return {
@@ -45,6 +46,21 @@ export default async function DashboardPage() {
       .eq("status", "submitted");
     pendingReviews = count ?? 0;
   }
+  let recordsToUpdate = 0;
+  if (profile.role === "botanist") {
+    const { count } = await supabase
+      .from("plant_records")
+      .select("uuid", { count: "exact", head: true })
+      .eq("botanist_id", profile.uuid)
+      .in("status", ["needs_revision", "rejected"]);
+    const updates = await supabase
+      .from("plant_updates")
+      .select("uuid", { count: "exact", head: true })
+      .eq("botanist_id", profile.uuid)
+      .eq("status", "open");
+    const updateCount = updatesSchemaMissing(updates.error) ? 0 : (updates.count ?? 0);
+    recordsToUpdate = (count ?? 0) + updateCount;
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -61,16 +77,16 @@ export default async function DashboardPage() {
       )}
       <ul className={`mt-6 grid items-stretch gap-3 ${items.length >= 6 ? "grid-cols-2 lg:grid-cols-3" : items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
         {items.map((item) => {
-          const waiting = item.href === "/officer" && pendingReviews > 0;
+          const badge = item.href === "/officer" ? pendingReviews : item.href === "/botanist" ? recordsToUpdate : 0;
           return (
             <li key={item.href} className="h-full">
               <Link
                 href={item.href}
-                className={`relative block h-full rounded-2xl border px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${waiting ? "border-amber-200 bg-amber-50 pr-8" : "border-emerald-950/10 bg-white"}`}
+                className={`relative block h-full rounded-2xl border px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${badge > 0 ? "border-amber-200 bg-amber-50 pr-8" : "border-emerald-950/10 bg-white"}`}
               >
-                {waiting && (
+                {badge > 0 && (
                   <span className="absolute right-2.5 top-2.5 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
-                    {pendingReviews}
+                    {badge}
                   </span>
                 )}
                 <span className="font-medium">{item.title}</span>

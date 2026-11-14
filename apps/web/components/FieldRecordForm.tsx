@@ -15,7 +15,7 @@ import {
   type CachedSpecies,
   type FieldDraft,
 } from "@/lib/field-drafts";
-import { flowerOptions, healthOptions, leafOptions, lifeStageOptions } from "@/lib/field-choices";
+import { flowerOptions, healthOptions, leafOptions, lifeStageOptions, plantRecordProblems } from "@/lib/field-choices";
 import type { Copy } from "@/lib/i18n";
 import { PHOTO_TOO_LARGE, PHOTO_WRONG_TYPE, photoProblemMessage } from "@/lib/photos";
 
@@ -33,6 +33,8 @@ export function FieldRecordForm({
   const [drafts, setDrafts] = useState<FieldDraft[]>([]);
   const [online, setOnline] = useState(true);
   const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState("");
   const [speciesFormKey, setSpeciesFormKey] = useState(0);
@@ -97,38 +99,70 @@ export function FieldRecordForm({
 
   return (
     <form
-      action={createRecord}
       className="space-y-3"
       onSubmit={async (event) => {
-        if (navigator.onLine) return;
         event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-        const draft = draftFromForm(formData, choices);
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        if (!navigator.onLine) {
+          const draft = draftFromForm(formData, choices);
+          const photo = formData.get("photo");
+          if (photo instanceof File && photo.size > 0) {
+            const problem = photoProblemMessage(photo);
+            if (problem) {
+              setFailed(true);
+              setMessage(photoMessage(problem, t));
+              return;
+            }
+            draft.photoBlob = photo;
+            draft.photoName = photo.name;
+            draft.photoType = photo.type;
+          }
+          await saveDraft(draft);
+          form.reset();
+          setSpeciesFormKey((key) => key + 1);
+          if (preview) URL.revokeObjectURL(preview);
+          setPreview("");
+          setFailed(false);
+          setMessage(t.savedOnPhone);
+          await refreshDrafts();
+          return;
+        }
+
+        const problem = plantRecordProblems(formData, { requirePhoto: true });
+        if (problem) {
+          setFailed(true);
+          setMessage(problem);
+          return;
+        }
         const photo = formData.get("photo");
         if (photo instanceof File && photo.size > 0) {
-          const problem = photoProblemMessage(photo);
-          if (problem) {
-            setMessage(photoMessage(problem, t));
+          const photoProblem = photoProblemMessage(photo);
+          if (photoProblem) {
+            setFailed(true);
+            setMessage(photoMessage(photoProblem, t));
             return;
           }
-          draft.photoBlob = photo;
-          draft.photoName = photo.name;
-          draft.photoType = photo.type;
         }
-        await saveDraft(draft);
-        event.currentTarget.reset();
-        setSpeciesFormKey((key) => key + 1);
-        if (preview) URL.revokeObjectURL(preview);
-        setPreview("");
-        setMessage(t.savedOnPhone);
-        await refreshDrafts();
+
+        setSaving(true);
+        setFailed(false);
+        setMessage("");
+        const result = await createRecord(formData);
+        setSaving(false);
+        if (result?.error) {
+          setFailed(true);
+          setMessage(result.error);
+        }
       }}
     >
       <p className={`rounded px-3 py-2 text-sm ${online ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-900"}`}>
         {online ? t.onlineNotice : t.offlineNotice}
       </p>
-      {serverError && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">{serverError}</p>}
-      {message && <p className="text-sm text-neutral-700">{message}</p>}
+      {serverError && !message && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">{serverError}</p>}
+      {message && (
+        <p className={`rounded px-3 py-2 text-sm ${failed ? "bg-red-50 text-red-800" : "text-neutral-700"}`}>{message}</p>
+      )}
       <section className="surface space-y-3 p-4">
         <h2 className="font-medium">{t.photos}</h2>
         <label className="block text-sm">
@@ -198,8 +232,8 @@ export function FieldRecordForm({
           <option value="submitted">{t.submitForReview}</option>
         </select>
       </label>
-      <button className="btn" type="submit">
-        {t.save}
+      <button className="btn" type="submit" disabled={saving}>
+        {saving ? t.saving : t.save}
       </button>
       {drafts.length > 0 && (
         <section className="surface p-4">

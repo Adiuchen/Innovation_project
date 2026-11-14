@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackPage } from "@/components/BackPage";
 import { PlantView } from "@/components/PlantView";
 import { requireUser } from "@/lib/auth";
 import { getCopy } from "@/lib/i18n";
+import { updatesSchemaMissing } from "@/lib/plant-update";
 import { loadRarePlant } from "@/lib/staff-plants";
 
 export default async function ApprovedPlantPage({
@@ -11,7 +13,7 @@ export default async function ApprovedPlantPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { supabase } = await requireUser(["botanist"]);
+  const { supabase, user } = await requireUser(["botanist"]);
   const { locale, t } = await getCopy();
   const plantId = decodeURIComponent(id).trim().toUpperCase();
   const { data: published } = await supabase
@@ -24,6 +26,24 @@ export default async function ApprovedPlantPage({
 
   if (!plant) notFound();
 
+  const mine = await supabase
+    .from("plant_records")
+    .select("uuid")
+    .eq("id", plantId)
+    .eq("botanist_id", user.id)
+    .eq("status", "approved")
+    .maybeSingle();
+  const assigned = mine.data?.uuid
+    ? await supabase
+        .from("plant_updates")
+        .select("uuid, status")
+        .eq("plant_record_id", mine.data.uuid)
+        .eq("botanist_id", user.id)
+        .in("status", ["open", "submitted"])
+        .maybeSingle()
+    : { data: null, error: null };
+  const assignedUpdate = updatesSchemaMissing(assigned.error) ? null : assigned.data;
+
   const { data: publicPhotos } = published
     ? await supabase.from("public_plant_photos").select("id, storage_path, caption").eq("qr_code", plant.qr_code)
     : { data: null };
@@ -32,10 +52,22 @@ export default async function ApprovedPlantPage({
   return (
     <main className="mx-auto max-w-5xl px-4 pt-4 pb-8">
       <BackPage href="/botanist/plants" label={t.backPage} />
+      {assignedUpdate && (
+        <p className="mt-4 rounded bg-amber-50 px-3 py-2 text-sm">
+          {assignedUpdate.status === "submitted" ? t.updateWaitingOfficer : t.updatesRequested}
+          {assignedUpdate.status === "open" && (
+            <>
+              {" "}
+              <Link className="font-semibold text-forest" href={`/botanist/updates/${assignedUpdate.uuid}`}>{t.openUpdate}</Link>
+            </>
+          )}
+        </p>
+      )}
       <div className="mt-4">
         <PlantView
           locale={locale}
           t={t}
+          canPrint
           qrCode={plant.qr_code}
           photos={photos ?? []}
           plant={{

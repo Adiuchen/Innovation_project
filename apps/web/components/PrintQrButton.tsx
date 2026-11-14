@@ -4,12 +4,14 @@ import { useState } from "react";
 
 export function PrintQrButton({
   qrCode,
+  recordId,
   label,
   printingLabel,
   successLabel,
   failedLabel,
 }: {
   qrCode: string;
+  recordId?: string | null;
   label: string;
   printingLabel: string;
   successLabel: string;
@@ -27,7 +29,7 @@ export function PrintQrButton({
       const response = await fetch("/api/print/plant-qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qrCode }),
+        body: JSON.stringify({ qrCode, recordId }),
       });
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {

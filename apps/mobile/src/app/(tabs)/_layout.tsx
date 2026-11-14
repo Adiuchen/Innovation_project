@@ -1,7 +1,11 @@
 import { Tabs } from "expo-router";
+import { useEffect, useState } from "react";
 import { SyncBar } from "@/components/SyncBar";
 import { ScanTabButtonIcon } from "@/components/ScanTabButton";
 import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, SpeciesTabIcon } from "@/components/TabIcon";
+import { useAuth } from "@/lib/auth";
+import { listRecords } from "@/lib/db";
+import { listOpenPlantUpdates } from "@/lib/plant-updates";
 import { usePreferences } from "@/lib/preferences";
 
 export const unstable_settings = {
@@ -17,6 +21,27 @@ const offTabBar = {
 
 export default function TabLayout() {
   const { palette, t } = usePreferences();
+  const { profile, version, pending } = useAuth();
+  const [attention, setAttention] = useState(0);
+
+  useEffect(() => {
+    if (profile?.role !== "botanist") {
+      setAttention(0);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([listRecords(profile.uuid), listOpenPlantUpdates(profile.uuid)])
+      .then(([records, updates]) => {
+        if (cancelled) return;
+        const waiting = records.filter((item) => item.status === "needs_revision" || item.status === "rejected").length;
+        setAttention(waiting + updates.rows.length);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pending, profile, version]);
+
   return (
     <Tabs
       // Match unstable_settings.anchor ("field") so Android/system back reaches Home instead of a dead GO_BACK.
@@ -41,7 +66,12 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="records"
-        options={{ title: t.recordsTab, tabBarIcon: ({ color, size }) => <RecordsTabIcon color={color} size={size} /> }}
+        options={{
+          title: t.recordsTab,
+          tabBarIcon: ({ color, size }) => <RecordsTabIcon color={color} size={size} />,
+          tabBarBadge: attention > 0 ? attention : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#dc2626", color: "#fff" },
+        }}
       />
       <Tabs.Screen
         name="scan"

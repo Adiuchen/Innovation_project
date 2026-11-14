@@ -36,6 +36,15 @@ async function findStoragePath(
       ? await query.is("hidden_at", null).maybeSingle()
       : await query.maybeSingle();
     if (!error && data?.storage_path) return data.storage_path;
+    if (table === "plant_photos") {
+      const pending = await supabase
+        .from("plant_photos")
+        .select("storage_path")
+        .eq("id", id)
+        .not("pending_update_id", "is", null)
+        .maybeSingle();
+      if (!pending.error && pending.data?.storage_path) return pending.data.storage_path;
+    }
   }
   return null;
 }

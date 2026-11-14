@@ -82,12 +82,12 @@ export function RecordSort({
       </div>
       <div className="mt-4 mb-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-emerald-950/15 bg-white shadow-sm">
         <div className="h-full overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b bg-emerald-50 text-left text-forest">
-                <th className="p-3 font-medium">{columns.name}</th>
-                <th className="p-3 font-medium">{columns.place}</th>
-                <th className="p-3 font-medium">{columns.status}</th>
+                <th className="w-[24%] p-3 font-medium">{columns.name}</th>
+                <th className="w-[18%] p-3 font-medium">{columns.place}</th>
+                <th className="w-48 p-3 font-medium">{columns.status}</th>
                 <th className="p-3 font-medium">{columns.review}</th>
               </tr>
             </thead>
@@ -98,8 +98,8 @@ export function RecordSort({
                     <Link className="font-medium hover:underline" href={`/botanist/${row.uuid}`}>{row.title}</Link>
                   </td>
                   <td className="p-3">{row.place}</td>
-                  <td className="p-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(row.status)}`}>
+                  <td className="p-3 whitespace-nowrap">
+                    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${statusTone(row.status)}`}>
                       {row.statusLabel}
                     </span>
                   </td>

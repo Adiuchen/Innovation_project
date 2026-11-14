@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { BackPage } from "@/components/BackPage";
+import { OfficerPlantUpdate } from "@/components/OfficerPlantUpdate";
 import { PlantView } from "@/components/PlantView";
 import { requireUser } from "@/lib/auth";
 import { getCopy } from "@/lib/i18n";
@@ -7,10 +8,13 @@ import { loadRarePlant } from "@/lib/staff-plants";
 
 export default async function OfficerApprovedPlantPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; updated?: string }>;
 }) {
   const { id } = await params;
+  const { error, updated } = await searchParams;
   const { supabase } = await requireUser(["conservation_officer"]);
   const { locale, t } = await getCopy();
   const plantId = decodeURIComponent(id).trim().toUpperCase();
@@ -36,6 +40,7 @@ export default async function OfficerApprovedPlantPage({
         <PlantView
           locale={locale}
           t={t}
+          canPrint
           qrCode={plant.qr_code}
           photos={photos ?? []}
           plant={{
@@ -58,6 +63,7 @@ export default async function OfficerApprovedPlantPage({
           }}
         />
       </div>
+      <OfficerPlantUpdate plantId={plantId} recordedBy={plant.recorded_by ?? null} error={error} updated={updated} />
     </main>
   );
 }

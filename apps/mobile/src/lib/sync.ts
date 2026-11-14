@@ -17,6 +17,7 @@ import {
   rememberFetchedPlant,
   resolveCanonicalPlantTag,
 } from "@/lib/publicPlants";
+import { listOpenPlantUpdates } from "@/lib/plant-updates";
 import { supabase } from "@/lib/supabase";
 import type { CachedRecord, Draft, LocalPhoto, PhotoRef, Profile, PublicPlant, Species } from "@/types";
 
@@ -392,7 +393,8 @@ export async function refreshReferenceData(profile: Profile) {
     });
   }
   await replaceRecords(profile.uuid, records);
-  return null;
+  const updates = await listOpenPlantUpdates(profile.uuid);
+  return updates.error;
 }
 
 export async function pendingCount(userId: string) {

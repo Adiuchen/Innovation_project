@@ -173,6 +173,7 @@ export async function syncDrafts() {
         location_name: textOrNull(draft.locationName),
         latitude: numberOrNull(draft.latitude),
         longitude: numberOrNull(draft.longitude),
+        qr_code: draft.status === "submitted" ? `plant-${draft.localId.slice(0, 8)}` : null,
         visibility: plantVisibility(draft.visibility),
         status: draft.status,
         sync_status: "synced",

@@ -4,14 +4,15 @@ import { PageHeading } from "@/components/PageHeading";
 import { PendingDrafts } from "@/components/PendingDrafts";
 import { requireUser } from "@/lib/auth";
 import { getCopy, statusText } from "@/lib/i18n";
+import { updatesSchemaMissing } from "@/lib/plant-update";
 import { statusTone } from "@/lib/status-tone";
 
 export default async function BotanistHome({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sort?: string; q?: string }>;
+  searchParams: Promise<{ error?: string; sort?: string; q?: string; updated?: string }>;
 }) {
-  const { error: actionError, sort: requestedSort, q = "" } = await searchParams;
+  const { error: actionError, sort: requestedSort, q = "", updated } = await searchParams;
   const { supabase, user } = await requireUser(["botanist"]);
   const { t } = await getCopy();
   const sort = ["newest", "oldest", "name", "place", "status"].includes(requestedSort ?? "")
@@ -34,6 +35,12 @@ export default async function BotanistHome({
     if (sort === "status") return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
     return b.recorded_at.localeCompare(a.recorded_at);
   });
+  const requested = await supabase
+    .from("plant_updates")
+    .select("uuid, status, plant_name, plant_records(id)")
+    .eq("botanist_id", user.id)
+    .eq("status", "open");
+  const updateRequests = updatesSchemaMissing(requested.error) ? [] : (requested.data ?? []);
   const rows: FieldRecordRow[] = sorted.map((record) => {
     const species = Array.isArray(record.species) ? record.species[0] : record.species;
     return {
@@ -63,6 +70,29 @@ export default async function BotanistHome({
         }
       />
       {(error || actionError) && <p className="shrink-0 text-sm text-red-700">{error?.message || actionError}</p>}
+      {updated === "submitted" && <p className="mt-3 shrink-0 rounded bg-emerald-50 px-3 py-2 text-sm">{t.updateSubmitted}</p>}
+      {updateRequests.length > 0 && (
+        <section className="mt-4 shrink-0">
+          <h2 className="text-sm font-medium text-neutral-500">{t.updatesRequested}</h2>
+          <ul className="mt-2 grid gap-2">
+            {updateRequests.map((item) => {
+              const linked = Array.isArray(item.plant_records) ? item.plant_records[0] : item.plant_records;
+              const label = [linked?.id, item.plant_name || t.unidentified].filter(Boolean).join(" · ");
+              return (
+                <li key={item.uuid}>
+                  <Link
+                    href={`/botanist/updates/${item.uuid}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100"
+                  >
+                    <span className="min-w-0 truncate font-medium">{label}</span>
+                    <span className="shrink-0 text-sm text-neutral-600">{t.openUpdate}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <PendingDrafts t={t} />
       {sorted.some((record) => record.status === "needs_revision" || record.status === "rejected") && (
         <section id="notices" className="mt-4 shrink-0">

@@ -3,6 +3,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { ProfilePanel, type ProfileNotice } from "@/components/ProfilePanel";
 import { homeForRole, getSessionProfile, type Profile } from "@/lib/auth";
 import { getCopy, statusText, type Copy } from "@/lib/i18n";
+import { updatesSchemaMissing } from "@/lib/plant-update";
 import { createClient } from "@/lib/supabase/server";
 
 export async function SiteHeader() {
@@ -54,18 +55,37 @@ async function loadNotices(
       .select("uuid, id, plant_name, status, species(scientific_name)")
       .eq("botanist_id", profile.uuid)
       .in("status", ["needs_revision", "rejected"])
-      .order("recorded_at", { ascending: false })
-      .limit(8);
-    return (data ?? []).map((record) => {
+      .order("recorded_at", { ascending: false });
+    const recordNotices = (data ?? []).map((record) => {
       const species = Array.isArray(record.species) ? record.species[0] : record.species;
+      const rejected = record.status === "rejected";
       return {
         id: record.uuid,
         href: `/botanist/${record.uuid}`,
         title: `${record.id} · ${record.plant_name || species?.scientific_name || t.unidentified}`,
-        detail: record.status === "rejected" ? t.noticeRejected : t.noticeRevision,
-        tone: record.status === "rejected" ? "rejected" : "revision",
+        detail: rejected ? t.noticeRejected : t.noticeRevision,
+        tone: rejected ? "rejected" as const : "revision" as const,
       };
     });
+    const requested = await supabase
+      .from("plant_updates")
+      .select("uuid, plant_name, plant_records(id)")
+      .eq("botanist_id", profile.uuid)
+      .eq("status", "open")
+      .order("created_at", { ascending: false });
+    const updateNotices = updatesSchemaMissing(requested.error)
+      ? []
+      : (requested.data ?? []).map((item) => {
+          const linked = Array.isArray(item.plant_records) ? item.plant_records[0] : item.plant_records;
+          return {
+            id: item.uuid,
+            href: `/botanist/updates/${item.uuid}`,
+            title: [linked?.id, item.plant_name || t.unidentified].filter(Boolean).join(" · "),
+            detail: t.updatesRequested,
+            tone: "revision" as const,
+          };
+        });
+    return [...updateNotices, ...recordNotices];
   }
 
   if (profile.role === "conservation_officer") {

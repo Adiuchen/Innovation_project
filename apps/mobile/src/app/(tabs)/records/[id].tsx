@@ -10,7 +10,8 @@ import { getRecord, getSpecies } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import type { Copy, Locale } from "@/lib/copy";
 import { usePreferences } from "@/lib/preferences";
-import { choiceLabel, firstParam, flowerChoices, formatWhen, healthChoices, leafChoices, lifeStageChoices, plantQrValue, recordName } from "@/lib/plant";
+import { choiceLabel, firstParam, flowerChoices, formatWhen, healthChoices, leafChoices, lifeStageChoices, plantQrValue, qrCodeForRecord, recordName } from "@/lib/plant";
+import { listOpenPlantUpdates } from "@/lib/plant-updates";
 import { deleteRemoteDraft, generateRecordQr, resubmitRecord } from "@/lib/remote";
 import { refreshReferenceData } from "@/lib/sync";
 import { siteUrl } from "@/lib/supabase";
@@ -18,8 +19,10 @@ import { colors } from "@/theme";
 import type { CachedRecord, FieldInput, Species } from "@/types";
 
 export default function RecordDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, notice } = useLocalSearchParams<{ id: string; notice?: string }>();
   const recordId = firstParam(id);
+  const updateNotice = firstParam(notice);
+  const askedToUpdate = updateNotice === "update" || updateNotice === "waiting";
   const { profile, online, syncNow } = useAuth();
   const { locale, t } = usePreferences();
   const [record, setRecord] = useState<CachedRecord | null>(null);
@@ -60,7 +63,8 @@ export default function RecordDetailScreen() {
 
   // Drafts, records sent back for changes, and rejected records can be edited (same as the website).
   const editable = record.status === "draft" || record.status === "needs_revision" || record.status === "rejected";
-  const qrValue = record.qr_code ? plantQrValue(record.qr_code, siteUrl) : null;
+  const tagCode = record.qr_code || (record.status === "draft" ? null : qrCodeForRecord(record.uuid));
+  const qrValue = tagCode ? plantQrValue(tagCode, siteUrl) : null;
 
   return (
     <Screen>
@@ -74,7 +78,23 @@ export default function RecordDetailScreen() {
           {record.recorded_at ? <Fact label="Recorded" value={formatWhen(record.recorded_at)} /> : null}
         </>
       ) : null}
-      {record.review_note && <Notice tone="warn">Officer note: {record.review_note}</Notice>}
+      {record.review_note && <Notice tone="warn">{t.officerNote}: {record.review_note}</Notice>}
+      {askedToUpdate && <Notice tone="warn">{updateNotice === "waiting" ? t.updateWaiting : t.updateAsked}</Notice>}
+      {updateNotice === "update" && profile.role === "botanist" ? (
+        <Button
+          label={t.openUpdate}
+          disabled={working}
+          onPress={async () => {
+            const loaded = await listOpenPlantUpdates(profile.uuid);
+            const match = loaded.rows.find((item) => item.plantRecordId === record.uuid && item.status === "open");
+            if (!match) {
+              setMessage(loaded.error ?? "This update is no longer open.");
+              return;
+            }
+            router.push({ pathname: "/records/update/[id]", params: { id: match.uuid } });
+          }}
+        />
+      ) : null}
       {message && <Notice tone="danger">{message}</Notice>}
       {saved && !message && <Notice tone="ok">{saved}</Notice>}
       {record.status === "submitted" ? (
@@ -192,12 +212,12 @@ export default function RecordDetailScreen() {
       {!record.qr_code && !online && (
         <Notice tone="warn">Connect to repair a missing QR tag, or submit a new record offline to assign one.</Notice>
       )}
-      {qrValue && record.qr_code ? (
+      {tagCode && qrValue ? (
         <View style={styles.qr}>
           <QRCode value={qrValue} size={180} />
-          <Text style={styles.meta}>{record.qr_code}</Text>
+          <Text style={styles.meta}>{tagCode}</Text>
           <Text style={styles.meta}>{qrValue}</Text>
-          <PrintQrButton qrCode={record.qr_code} label={record.plant_name || record.qr_code} />
+          <PrintQrButton qrCode={tagCode} label={record.plant_name || tagCode} />
           {!siteUrl ? (
             <Notice tone="warn">
               Set EXPO_PUBLIC_SITE_URL to the website address so a printed tag opens the public plant page. This code

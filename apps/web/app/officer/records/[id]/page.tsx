@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { StickyBar } from "@/components/StickyBar";
 import { requireUser } from "@/lib/auth";
 import { getCopy } from "@/lib/i18n";
+import { plantTagCode } from "@/lib/plant-access";
 import { reviewNotice } from "@/lib/review-notice";
 import { reviewRecord } from "../../actions";
 
@@ -25,7 +26,7 @@ export default async function OfficerRecordPage({
   const { data: record, error: queryError } = await supabase
     .from("plant_records")
     .select(
-      "uuid, id, plant_name, life_stage, status, location_name, latitude, longitude, recorded_at, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, review_note, species(scientific_name, common_name, local_name, family, genus, conservation_status, distribution, description, ecological_info, cultural_significance), profiles!plant_records_botanist_id_fkey(name)",
+      "uuid, id, qr_code, local_id, plant_name, life_stage, status, location_name, latitude, longitude, recorded_at, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, review_note, species(scientific_name, common_name, local_name, family, genus, conservation_status, distribution, description, ecological_info, cultural_significance), profiles!plant_records_botanist_id_fkey(name)",
     )
     .eq("uuid", id)
     .maybeSingle();
@@ -76,6 +77,9 @@ export default async function OfficerRecordPage({
         <PlantView
           locale={locale}
           t={t}
+          canPrint
+          recordId={record.uuid}
+          qrCode={plantTagCode(record)}
           photos={photos ?? []}
           plant={{
             plantName: record.plant_name,

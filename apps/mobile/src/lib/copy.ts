@@ -127,6 +127,20 @@ const en = {
   printNeedsDevBuild: "Expo Go cannot reach the printer. Printing needs a development build of this app.",
   printSiteDown: "The website on this Wi-Fi could not be reached, so nothing was sent to the printer.",
   printerHeading: "Field printer",
+  notices: "Notices",
+  officerNote: "Officer note",
+  noticeRevision: "The officer asked you to update this record, then submit it again.",
+  noticeRejected: "The officer rejected this record. Update it, then submit it again.",
+  updatesRequested: "Updates requested",
+  openUpdate: "Update",
+  updateAsked: "An officer asked you to update this plant. Visitors still see the approved details until an officer approves the update.",
+  updateWaiting: "Waiting for an officer",
+  updateFormNote: "The plant ID and QR stay the same. Visitors keep the approved record until an officer approves this update.",
+  saveUpdate: "Save",
+  submitUpdate: "Submit update",
+  updateSaved: "Saved. Submit it when the details are ready.",
+  newSpecies: "New species",
+  pendingPhoto: "New photo, waiting for approval",
 };
 
 const zh: typeof en = {
@@ -256,6 +270,20 @@ const zh: typeof en = {
   printNeedsDevBuild: "Expo Go 无法连接打印机。打印需要安装这个 App 的 development build。",
   printSiteDown: "连不上同一 Wi-Fi 上的网站，所以没有送到打印机。",
   printerHeading: "现场打印机",
+  notices: "需要处理",
+  officerNote: "官员备注",
+  noticeRevision: "保育官员请你修改这条记录，然后重新提交。",
+  noticeRejected: "保育官员拒绝了这条记录。改完后再提交。",
+  updatesRequested: "请更新这些植物",
+  openUpdate: "去更新",
+  updateAsked: "保育官员请你更新这株植物。在官员批准之前，访客看到的仍是已通过的记录。",
+  updateWaiting: "等待官员批准",
+  updateFormNote: "植物编号和二维码不变。在官员批准之前，访客看到的仍是已通过的记录。",
+  saveUpdate: "保存",
+  submitUpdate: "提交更新",
+  updateSaved: "已保存。准备好后再提交。",
+  newSpecies: "新物种",
+  pendingPhoto: "新照片，等待批准",
 };
 
 const ms: typeof en = {
@@ -385,6 +413,20 @@ const ms: typeof en = {
   printNeedsDevBuild: "Expo Go tidak boleh mencapai pencetak. Mencetak memerlukan development build aplikasi ini.",
   printSiteDown: "Laman web pada Wi-Fi ini tidak dapat dihubungi, jadi tiada apa dihantar ke pencetak.",
   printerHeading: "Pencetak lapangan",
+  notices: "Perlu tindakan",
+  officerNote: "Nota pegawai",
+  noticeRevision: "Pegawai meminta anda mengemaskini rekod ini, kemudian hantar semula.",
+  noticeRejected: "Pegawai menolak rekod ini. Kemaskini rekod, kemudian hantar semula.",
+  updatesRequested: "Kemas kini diminta",
+  openUpdate: "Kemas kini",
+  updateAsked: "Pegawai meminta anda mengemaskini tumbuhan ini. Pelawat masih melihat butiran yang diluluskan sehingga pegawai meluluskan kemas kini.",
+  updateWaiting: "Menunggu pegawai",
+  updateFormNote: "ID tumbuhan dan kod QR kekal. Pelawat masih melihat rekod yang diluluskan sehingga pegawai meluluskan kemas kini ini.",
+  saveUpdate: "Simpan",
+  submitUpdate: "Hantar kemas kini",
+  updateSaved: "Disimpan. Hantar apabila butiran sudah siap.",
+  newSpecies: "Spesies baharu",
+  pendingPhoto: "Gambar baharu, menunggu kelulusan",
 };
 
 const copies = { en, zh, ms };
