@@ -63,6 +63,22 @@ export async function listRareApproved(supabase: RecordsClient): Promise<StaffLi
   });
 }
 
+export async function listStaffPlants(supabase: RecordsClient): Promise<{ plants: StaffListPlant[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from("public_plant_pages")
+    .select("plant_id, plant_name, scientific_name, common_name, local_name, location_name, recorded_by, recorded_at")
+    .order("recorded_at", { ascending: false });
+  if (error) return { plants: [], error: error.message };
+
+  const published = (data ?? []).flatMap((plant) => (plant.plant_id ? [plant as StaffListPlant] : []));
+  const rare = await listRareApproved(supabase);
+  const seen = new Set(published.map((plant) => plant.plant_id));
+  return {
+    plants: [...published, ...rare.filter((plant) => plant.plant_id && !seen.has(plant.plant_id))],
+    error: null,
+  };
+}
+
 export async function loadRarePlant(supabase: RecordsClient, plantId: string) {
   const { data, error } = await supabase
     .from("plant_records")

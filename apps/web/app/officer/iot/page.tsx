@@ -1,7 +1,5 @@
-import { OfficerIot } from "@/components/OfficerIot";
-import { requireUser } from "@/lib/auth";
+import { IotKitPage } from "@/components/IotKitPage";
 
-export default async function OfficerIotPage() {
-  await requireUser(["conservation_officer", "administrator"]);
-  return <OfficerIot />;
+export default function OfficerIotPage() {
+  return <IotKitPage roles={["conservation_officer", "administrator"]} basePath="/officer/iot" />;
 }

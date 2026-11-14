@@ -99,30 +99,45 @@ export function OfficerIotBoard({
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">{t.deviceOffline}</p>
           )}
           <section className="mt-4 grid gap-3 sm:grid-cols-2">
-            <article className="surface p-4">
+            <article className="surface px-5 py-4">
               <h2 className="text-sm text-neutral-600">{t.rainingNow}</h2>
-              <p className="mt-1 text-lg font-medium">{latest.is_raining ? t.raining : t.notRaining}</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-lg sm:font-medium">
+                {latest.is_raining ? t.raining : t.notRaining}
+              </p>
               <p className="mt-1 text-sm text-neutral-500">{rainAgoLabel(daysAgo, t)}</p>
             </article>
-            <article className="surface p-4">
+            <article className="surface px-5 py-4">
               <h2 className="text-sm text-neutral-600">{t.plantStatus}</h2>
               <p className="mt-3">
                 <span
-                  className={`inline-flex min-h-10 min-w-28 items-center justify-center rounded-full px-6 text-m font-semibold ${statusTone(latest.plant_status)}`}
+                  className={`inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-semibold ${statusTone(latest.plant_status)}`}
                 >
                   {statusLabel(latest.plant_status, t)}
                 </span>
               </p>
             </article>
-            <article className="surface p-4 sm:col-span-2">
+            <article className="surface px-5 py-4 sm:col-span-2">
               <h2 className="text-sm text-neutral-600">{t.latestClimate}</h2>
-              <p className="mt-1 text-lg font-medium">
-                {formatTemperature(latest.temperature_c) ?? t.noReading}
-                {" · "}
-                {formatHumidity(latest.humidity) ?? t.noReading}
-              </p>
-              <p className="mt-1 text-sm text-neutral-500">
-                {formatParkTimeDate(eventTime(latest), locale)} · {t.device} {latest.device_id}
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <p>
+                  <span className="block text-sm text-neutral-500">{t.airTemperature}</span>
+                  <span className="mt-1 block text-2xl font-semibold tracking-tight sm:text-lg sm:font-medium">
+                    {formatTemperature(latest.temperature_c) ?? t.noReading}
+                  </span>
+                </p>
+                <p>
+                  <span className="block text-sm text-neutral-500">{t.airHumidity}</span>
+                  <span className="mt-1 block text-2xl font-semibold tracking-tight sm:text-lg sm:font-medium">
+                    {formatHumidity(latest.humidity) ?? t.noReading}
+                  </span>
+                </p>
+              </div>
+              <p className="mt-3 border-t border-emerald-950/10 pt-3 text-sm text-neutral-500">
+                <span className="block sm:inline">{formatParkTimeDate(eventTime(latest), locale)}</span>
+                <span className="hidden sm:inline"> · </span>
+                <span className="mt-1 block break-all sm:mt-0 sm:inline">
+                  {t.device} {latest.device_id}
+                </span>
               </p>
             </article>
           </section>
@@ -133,21 +148,27 @@ export function OfficerIotBoard({
       {alerts.length === 0 ? (
         <p className="mt-2 text-sm text-neutral-500">{t.noAlerts}</p>
       ) : (
-        <ul className="mt-2 space-y-2">
+        <ul className="mt-3 space-y-3 sm:space-y-2">
           {alerts.map((alert) => (
-            <li key={alert.id} className="surface p-3 text-sm">
-              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(alert.event)}`}>
-                {statusLabel(alert.event, t)}
-              </span>
-              <p className="mt-2">
-                {alert.is_raining ? t.raining : t.notRaining}
-                {" · "}
-                {formatTemperature(alert.temperature_c) ?? t.noReading}
-                {" · "}
-                {formatHumidity(alert.humidity) ?? t.noReading}
-              </p>
-              <p className="text-neutral-500">
-                {formatParkTimeDate(eventTime(alert), locale)} · {t.device} {alert.device_id}
+            <li key={alert.id} className="surface px-5 py-4 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 text-neutral-800">
+                  {alert.is_raining ? t.raining : t.notRaining}
+                  {" · "}
+                  {formatTemperature(alert.temperature_c) ?? t.noReading}
+                  {" · "}
+                  {formatHumidity(alert.humidity) ?? t.noReading}
+                </p>
+                <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(alert.event)}`}>
+                  {statusLabel(alert.event, t)}
+                </span>
+              </div>
+              <p className="mt-2 text-neutral-500">
+                <span className="block sm:inline">{formatParkTimeDate(eventTime(alert), locale)}</span>
+                <span className="hidden sm:inline"> · </span>
+                <span className="mt-0.5 block break-all sm:mt-0 sm:inline">
+                  {t.device} {alert.device_id}
+                </span>
               </p>
             </li>
           ))}
