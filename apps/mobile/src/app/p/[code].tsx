@@ -79,10 +79,9 @@ export default function PublicPlantScreen() {
         </Text>
       ) : page?.kind === "in_progress" ? (
         <View style={styles.progress}>
-          <Text style={styles.progressTitle}>In Progress</Text>
+          <Text style={styles.progressTitle}>Not available yet</Text>
           <Text style={styles.progressBody}>
-            This plant tag is registered and waiting for review. Public details will appear here after a conservation
-            officer approves the record.
+            This plant is not open to the public until a conservation officer approves the record.
           </Text>
           <Text style={styles.progressCode}>{code}</Text>
         </View>

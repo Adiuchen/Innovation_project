@@ -2,6 +2,7 @@ import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getSessionProfile, type Profile } from "@/lib/auth";
+import { plantTagCode } from "@/lib/plant-access";
 import { printPlantQr } from "@/lib/printer";
 
 export const runtime = "nodejs";
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const qrCode = typeof body?.qrCode === "string" ? body.qrCode.trim() : "";
+  const recordId = typeof body?.recordId === "string" ? body.recordId.trim() : "";
   if (!/^plant-[a-z0-9]{8}$/i.test(qrCode)) {
     return NextResponse.json({ error: "That plant does not have a QR code." }, { status: 400 });
   }
@@ -98,17 +100,44 @@ export async function POST(request: Request) {
     .eq("qr_code", qrCode)
     .maybeSingle();
 
-  let labelSource = plant;
+  let labelSource = plant
+    ? { qr_code: plant.qr_code as string, plant_id: plant.plant_id, plant_name: plant.plant_name }
+    : null;
+  if (!labelSource?.qr_code && /^[0-9a-f-]{36}$/i.test(recordId)) {
+    const { data: owned } = await supabase
+      .from("plant_records")
+      .select("qr_code, id, plant_name, local_id, uuid")
+      .eq("uuid", recordId)
+      .maybeSingle();
+    const tag = owned ? plantTagCode(owned) : null;
+    if (owned && tag && tag.toLowerCase() === qrCode.toLowerCase()) {
+      labelSource = { qr_code: tag, plant_id: owned.id, plant_name: owned.plant_name };
+    }
+  }
   if (!labelSource?.qr_code) {
     const { data: record } = await supabase
       .from("plant_records")
-      .select("qr_code, id, plant_name")
+      .select("qr_code, id, plant_name, local_id, uuid")
       .eq("qr_code", qrCode)
       .maybeSingle();
-    if (!record?.qr_code) {
-      return NextResponse.json({ error: "That plant does not have a QR code." }, { status: 404 });
+    if (record) {
+      labelSource = {
+        qr_code: plantTagCode(record) || qrCode,
+        plant_id: record.id,
+        plant_name: record.plant_name,
+      };
     }
-    labelSource = { qr_code: record.qr_code, plant_id: record.id, plant_name: record.plant_name };
+  }
+  if (!labelSource?.qr_code) {
+    const rpc = await supabase.rpc("resolve_plant_tag", { code: qrCode });
+    const row = Array.isArray(rpc.data) ? rpc.data[0] : null;
+    if (row && typeof row.status === "string") {
+      const tag = typeof row.qr_code === "string" && row.qr_code ? row.qr_code : qrCode;
+      labelSource = { qr_code: tag, plant_id: null, plant_name: null };
+    }
+  }
+  if (!labelSource?.qr_code) {
+    return NextResponse.json({ error: "That plant does not have a QR code." }, { status: 404 });
   }
 
   const printerHost = privateIpv4(body?.host);

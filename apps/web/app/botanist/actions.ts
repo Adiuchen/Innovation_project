@@ -13,14 +13,10 @@ export async function createRecord(formData: FormData) {
   const { supabase, user } = await requireUser(["botanist"]);
   const status = String(formData.get("status") || "draft");
   const problem = plantRecordProblems(formData, { requirePhoto: true });
-  if (problem) {
-    redirect(`/botanist/new?error=${encodeURIComponent(problem)}`);
-  }
+  if (problem) return { error: problem };
 
   const species = await speciesFromForm(supabase, user.id, formData);
-  if (species.error) {
-    redirect(`/botanist/new?error=${encodeURIComponent(species.error)}`);
-  }
+  if (species.error) return { error: species.error };
 
   const submitted = status === "submitted";
   // Same stable tag rule as mobile: plant-{local_id[0:8]}, never regenerated from server uuid.
@@ -52,7 +48,7 @@ export async function createRecord(formData: FormData) {
     .single();
 
   if (error || !data) {
-    redirect(`/botanist/new?error=${encodeURIComponent(visibilitySaveError(error?.message ?? "Could not save"))}`);
+    return { error: visibilitySaveError(error?.message ?? "Could not save") };
   }
 
   const photoError = await saveRecordPhoto(supabase, user.id, data.uuid, formData);
@@ -60,7 +56,7 @@ export async function createRecord(formData: FormData) {
     redirect(`/botanist?error=${encodeURIComponent(photoError)}`);
   }
 
-  redirect("/botanist");
+  redirect(submitted ? `/botanist/${data.uuid}` : "/botanist");
 }
 
 export async function addRecordPhoto(formData: FormData) {
@@ -125,15 +121,10 @@ export async function generateQr(formData: FormData) {
 export async function resubmit(formData: FormData) {
   const { supabase, user } = await requireUser(["botanist"]);
   const id = String(formData.get("id"));
-  const { data: existing } = await supabase
-    .from("plant_records")
-    .select("status, qr_code, local_id")
-    .eq("uuid", id)
-    .eq("botanist_id", user.id)
-    .maybeSingle();
+  const existing = await loadEditableRecord(supabase, id, user.id);
 
-  if (!existing || !["draft", "needs_revision", "rejected"].includes(existing.status)) {
-    redirect(`/botanist/${id}?error=${encodeURIComponent("This record can no longer be edited.")}`);
+  if ("error" in existing) {
+    redirect(`/botanist/${id}?error=${encodeURIComponent(existing.error)}`);
   }
   const problem = plantRecordProblems(formData);
   if (problem) {
@@ -147,7 +138,7 @@ export async function resubmit(formData: FormData) {
 
   const seed =
     typeof existing.local_id === "string" && existing.local_id.length >= 8 ? existing.local_id : id;
-  const { error } = await supabase
+  const { data: saved, error } = await supabase
     .from("plant_records")
     .update({
       plant_name: textOrNull(formData.get("plant_name")),
@@ -168,12 +159,50 @@ export async function resubmit(formData: FormData) {
     })
     .eq("uuid", id)
     .eq("botanist_id", user.id)
-    .in("status", ["draft", "needs_revision", "rejected"]);
+    .in("status", ["draft", "needs_revision", "rejected"])
+    .select("uuid");
 
   if (error) {
     redirect(`/botanist/${id}?error=${encodeURIComponent(visibilitySaveError(error.message))}`);
   }
-  redirect("/botanist");
+  if (!saved?.length) {
+    redirect(`/botanist/${id}?error=${encodeURIComponent("This rejected record could not be sent again. Run apps/mobile/supabase/resubmit-rejected.sql in the Supabase SQL editor, then try once more.")}`);
+  }
+  redirect(`/botanist/${id}`);
+}
+
+const EDITABLE = ["draft", "needs_revision", "rejected"];
+
+async function loadEditableRecord(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  id: string,
+  userId: string,
+) {
+  const withLocalId = await supabase
+    .from("plant_records")
+    .select("status, qr_code, local_id")
+    .eq("uuid", id)
+    .eq("botanist_id", userId)
+    .maybeSingle();
+  const read =
+    withLocalId.error && /local_id|schema cache|column/i.test(withLocalId.error.message)
+      ? await supabase
+          .from("plant_records")
+          .select("status, qr_code")
+          .eq("uuid", id)
+          .eq("botanist_id", userId)
+          .maybeSingle()
+      : withLocalId;
+  if (read.error) return { error: read.error.message };
+  const status = String(read.data?.status ?? "");
+  if (!read.data || !EDITABLE.includes(status)) {
+    return { error: read.data ? `This record can no longer be edited (${status}).` : "This record can no longer be edited." };
+  }
+  return {
+    status,
+    qr_code: read.data.qr_code as string | null,
+    local_id: "local_id" in read.data ? (read.data.local_id as string | null) : null,
+  };
 }
 
 async function saveRecordPhoto(

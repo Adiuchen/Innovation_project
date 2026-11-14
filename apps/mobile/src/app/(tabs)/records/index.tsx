@@ -1,11 +1,12 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Badge, Muted, Notice } from "@/components/ui";
 import { deleteDraft, listDrafts, listRecords } from "@/lib/db";
 import { deleteLocalPhoto } from "@/lib/photos";
 import { useAuth } from "@/lib/auth";
 import { usePreferences } from "@/lib/preferences";
+import { listOpenPlantUpdates, type UpdateLoad, type UpdateRequest } from "@/lib/plant-updates";
 import { formatWhen, recordName } from "@/lib/plant";
 import { colors } from "@/theme";
 import type { CachedRecord, Draft } from "@/types";
@@ -31,16 +32,26 @@ export default function RecordsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
+  const [updates, setUpdates] = useState<UpdateRequest[]>([]);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       if (!profile || version < 0 || pending < 0) return;
       let cancelled = false;
-      Promise.all([listRecords(profile.uuid), listDrafts(profile.uuid)])
-        .then(([nextRecords, nextDrafts]) => {
+      Promise.all([
+        listRecords(profile.uuid),
+        listDrafts(profile.uuid),
+        profile.role === "botanist"
+          ? listOpenPlantUpdates(profile.uuid)
+          : Promise.resolve({ rows: [], error: null } satisfies UpdateLoad),
+      ])
+        .then(([nextRecords, nextDrafts, nextUpdates]) => {
           if (cancelled) return;
           setRecords(nextRecords);
           setDrafts(nextDrafts);
+          setUpdates(nextUpdates.rows);
+          setUpdateError(nextUpdates.error);
         })
         .catch(() => undefined);
       return () => {
@@ -60,14 +71,18 @@ export default function RecordsScreen() {
     });
   }, [query, records, sort]);
 
+  const attention = useMemo(
+    () => records.filter((item) => item.status === "needs_revision" || item.status === "rejected"),
+    [records],
+  );
+  const noticeCount = profile?.role === "botanist" ? attention.length + updates.length : 0;
+
   if (!profile) return null;
 
   return (
-    <FlatList
+    <ScrollView
       style={[styles.list, { backgroundColor: palette.field }]}
       contentContainerStyle={styles.content}
-      data={visible}
-      keyExtractor={(item) => item.uuid}
       keyboardShouldPersistTaps="handled"
       refreshControl={
         <RefreshControl
@@ -79,83 +94,145 @@ export default function RecordsScreen() {
           }}
         />
       }
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t.findRecords}
-            placeholderTextColor={colors.muted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.search}
-          />
-          <View style={styles.sorts}>
-            {sorts.map((item) => {
-              const selected = item.key === sort;
-              return (
-                <Pressable
-                  key={item.key}
-                  accessibilityRole="button"
-                  onPress={() => setSort(item.key)}
-                  style={[styles.sort, selected && styles.sortSelected]}
-                >
-                  <Text style={[styles.sortText, selected && styles.sortTextSelected]}>
-                    {item.key === "recent" ? t.recent : item.key === "oldest" ? t.oldest : item.key === "name" ? t.name : t.status}
-                  </Text>
-                </Pressable>
-              );
-            })}
+    >
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t.findRecords}
+        placeholderTextColor={colors.muted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.search}
+      />
+      <View style={styles.sorts}>
+        {sorts.map((item) => {
+          const selected = item.key === sort;
+          return (
+            <Pressable
+              key={item.key}
+              accessibilityRole="button"
+              onPress={() => setSort(item.key)}
+              style={[styles.sort, selected && styles.sortSelected]}
+            >
+              <Text style={[styles.sortText, selected && styles.sortTextSelected]}>
+                {item.key === "recent" ? t.recent : item.key === "oldest" ? t.oldest : item.key === "name" ? t.name : t.status}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.count}>
+        {visible.length} {visible.length === 1 ? t.record : t.records}
+      </Text>
+      {updateError && updates.length === 0 ? <Notice tone="warn">{updateError}</Notice> : null}
+      {noticeCount > 0 && (
+        <View style={styles.block}>
+          <View style={styles.noticeHead}>
+            <Text style={styles.heading}>{t.notices}</Text>
+            <Text style={styles.countBadge}>{noticeCount}</Text>
           </View>
-          <Text style={styles.count}>
-            {visible.length} {visible.length === 1 ? t.record : t.records}
-          </Text>
-          {drafts.length > 0 && (
-            <View style={styles.block}>
-              <Text style={styles.heading}>{t.stillOnPhone}</Text>
-              {drafts.map((draft) => (
-                <View key={draft.local_id} style={[styles.row, styles.draftRow]}>
-                  <Pressable style={styles.draftMain} onPress={() => router.push(`/records/draft/${draft.local_id}`)}>
-                    <Text style={styles.name}>{recordName(draft.plant_name, draft.species_label)}</Text>
-                    <Muted>{draft.sync_error || draft.location_name || t.notUploaded}</Muted>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete draft ${recordName(draft.plant_name, draft.species_label)}`}
-                    hitSlop={8}
-                    style={styles.deleteButton}
-                    onPress={() =>
-                      Alert.alert(
-                        "Delete this draft?",
-                        "It has not been uploaded, so it and its photos will be gone for good.",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Delete",
-                            style: "destructive",
-                            onPress: async () => {
-                              // Only the app's own photo copies are removed, never gallery originals.
-                              for (const photo of draft.photos ?? []) {
-                                if (photo.uri.startsWith("file:") && photo.uri.includes("/photos/")) await deleteLocalPhoto(photo.uri);
-                              }
-                              await deleteDraft(draft.local_id);
-                              setDrafts((current) => current.filter((item) => item.local_id !== draft.local_id));
-                              await refreshCount();
-                            },
-                          },
-                        ],
-                      )
-                    }
-                  >
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
+          {updates.map((item) => {
+            const code = records.find((record) => record.uuid === item.plantRecordId)?.code;
+            const label = [code, item.plantName].filter(Boolean).join(" · ");
+            const waiting = item.status === "submitted";
+            return (
+              <Pressable
+                key={item.uuid}
+                style={styles.noticeCard}
+                onPress={() =>
+                  waiting
+                    ? router.push({
+                        pathname: "/records/[id]",
+                        params: { id: item.plantRecordId, notice: "waiting" },
+                      })
+                    : router.push({
+                        pathname: "/records/update/[id]",
+                        params: { id: item.uuid },
+                      })
+                }
+              >
+                <Text style={styles.noticeName} numberOfLines={1}>
+                  {label || t.updatesRequested}
+                </Text>
+                <Text style={styles.open}>{waiting ? t.updateWaiting : t.openUpdate}</Text>
+              </Pressable>
+            );
+          })}
+          {attention.map((item) => (
+            <Pressable key={item.uuid} style={styles.noticeCard} onPress={() => router.push(`/records/${item.uuid}`)}>
+              <Text style={styles.noticeName} numberOfLines={1}>
+                {item.code ? `${item.code} · ` : ""}
+                {recordName(item.plant_name, item.species_name)}
+              </Text>
+              <Badge status={item.status} />
+            </Pressable>
+          ))}
         </View>
-      }
-      ListEmptyComponent={
+      )}
+      {drafts.length > 0 && (
+        <View style={styles.block}>
+          <Text style={styles.heading}>{t.stillOnPhone}</Text>
+          {drafts.map((draft) => (
+            <View key={draft.local_id} style={[styles.row, styles.draftRow]}>
+              <Pressable style={styles.draftMain} onPress={() => router.push(`/records/draft/${draft.local_id}`)}>
+                <Text style={styles.name}>{recordName(draft.plant_name, draft.species_label)}</Text>
+                <Muted>{draft.sync_error || draft.location_name || t.notUploaded}</Muted>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Delete draft ${recordName(draft.plant_name, draft.species_label)}`}
+                hitSlop={8}
+                style={styles.deleteButton}
+                onPress={() =>
+                  Alert.alert(
+                    "Delete this draft?",
+                    "It has not been uploaded, so it and its photos will be gone for good.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: async () => {
+                          // Only the app's own photo copies are removed, never gallery originals.
+                          for (const photo of draft.photos ?? []) {
+                            if (photo.uri.startsWith("file:") && photo.uri.includes("/photos/")) await deleteLocalPhoto(photo.uri);
+                          }
+                          await deleteDraft(draft.local_id);
+                          setDrafts((current) => current.filter((item) => item.local_id !== draft.local_id));
+                          await refreshCount();
+                        },
+                      },
+                    ],
+                  )
+                }
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      {visible.map((item) => {
+        const needsAttention = item.status === "needs_revision" || item.status === "rejected";
+        return (
+          <Pressable
+            key={item.uuid}
+            style={[styles.row, needsAttention && styles.attentionRow]}
+            onPress={() => router.push(`/records/${item.uuid}`)}
+          >
+            <Text style={styles.name}>
+              {item.code ? `${item.code} · ` : ""}
+              {recordName(item.plant_name, item.species_name)}
+            </Text>
+            <Muted>
+              {item.location_name || "No place name"}
+              {item.recorded_at ? ` · ${formatWhen(item.recorded_at)}` : ""}
+            </Muted>
+            <Badge status={item.status} />
+          </Pressable>
+        );
+      })}
+      {visible.length === 0 && (
         <Notice>
           {records.length === 0
             ? profile.role === "botanist"
@@ -163,28 +240,14 @@ export default function RecordsScreen() {
               : "Botanist field records appear here after that botanist signs in."
             : t.noMatch}
         </Notice>
-      }
-      renderItem={({ item }) => (
-        <Pressable style={styles.row} onPress={() => router.push(`/records/${item.uuid}`)}>
-          <Text style={styles.name}>
-            {item.code ? `${item.code} · ` : ""}
-            {recordName(item.plant_name, item.species_name)}
-          </Text>
-          <Muted>
-            {item.location_name || "No place name"}
-            {item.recorded_at ? ` · ${formatWhen(item.recorded_at)}` : ""}
-          </Muted>
-          <Badge status={item.status} />
-        </Pressable>
       )}
-    />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: colors.field },
-  content: { padding: 16, gap: 10 },
-  header: { gap: 12, marginBottom: 8 },
+  content: { padding: 16, gap: 10, paddingBottom: 32 },
   search: {
     minHeight: 48,
     borderRadius: 14,
@@ -205,7 +268,34 @@ const styles = StyleSheet.create({
   sortTextSelected: { color: "#f7fbf8" },
   count: { color: colors.muted, fontSize: 13 },
   block: { gap: 8 },
+  noticeHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   heading: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  countBadge: {
+    minWidth: 22,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "#dc2626",
+    color: "#fff",
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  noticeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.warningBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e7c98a",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  noticeName: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: "600" },
+  open: { color: colors.warning, fontSize: 13, fontWeight: "700" },
+  attentionRow: { borderColor: "#e7c98a", backgroundColor: colors.warningBg },
   draftRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   draftMain: { flex: 1, gap: 4 },
   deleteButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.dangerBg },

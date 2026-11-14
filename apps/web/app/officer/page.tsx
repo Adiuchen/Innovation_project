@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { healthLabels, optionLabel } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
 import { reviewNotice } from "@/lib/review-notice";
+import { updatesSchemaMissing } from "@/lib/plant-update";
 import { reviewRecord } from "./actions";
 
 export default async function OfficerHome({
@@ -26,6 +27,11 @@ export default async function OfficerHome({
   if (status && status !== "all") request = request.eq("status", status);
   const { data: records, error: queryError } = await request;
 
+  const waitingUpdates = await supabase
+    .from("plant_updates")
+    .select("uuid, plant_name, plant_records(id, plant_name)")
+    .eq("status", "submitted");
+  const plantUpdates = updatesSchemaMissing(waitingUpdates.error) ? [] : (waitingUpdates.data ?? []);
   const notice = reviewNotice(done, plant, t);
   const next = `/officer?${new URLSearchParams({ status, ...(q ? { q } : {}) }).toString()}`;
   const query = q.trim().toLowerCase();
@@ -52,6 +58,29 @@ export default async function OfficerHome({
       {notice && <ReviewToast message={notice.message} tone={notice.tone} />}
       {(error || queryError) && (
         <p className="mt-3 text-sm text-red-700">{error || queryError?.message}</p>
+      )}
+      {plantUpdates.length > 0 && (
+        <section className="mt-4">
+          <h2 className="text-sm font-medium text-neutral-500">{t.reviewPlantUpdates}</h2>
+          <ul className="mt-2 grid gap-2">
+            {plantUpdates.map((item) => {
+              const linked = Array.isArray(item.plant_records) ? item.plant_records[0] : item.plant_records;
+              const plantId = linked?.id;
+              const label = [plantId, item.plant_name || linked?.plant_name || t.unidentified].filter(Boolean).join(" · ");
+              return (
+                <li key={item.uuid}>
+                  <Link
+                    href={plantId ? `/officer/plants/${encodeURIComponent(plantId)}` : "/officer/plants"}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100"
+                  >
+                    <span className="min-w-0 truncate font-medium">{label}</span>
+                    <span className="shrink-0 text-sm">{t.approveUpdate}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
       <form className="mt-4 flex flex-wrap gap-2" action="/officer">
         <input className="rounded border px-2 py-1" name="q" defaultValue={q} placeholder={t.speciesOrPlace} />

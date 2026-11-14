@@ -6,9 +6,10 @@ import { SpeciesSelect } from "@/components/SpeciesSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StickyBar } from "@/components/StickyBar";
 import { requireUser } from "@/lib/auth";
+import { plantTagCode } from "@/lib/plant-access";
 import { flowerOptions, healthOptions, leafOptions, lifeStageOptions } from "@/lib/field-choices";
 import { getCopy } from "@/lib/i18n";
-import { addRecordPhoto, generateQr, resubmit } from "../actions";
+import { addRecordPhoto, resubmit } from "../actions";
 
 export default async function RecordDetail({
   params,
@@ -69,7 +70,9 @@ export default async function RecordDetail({
         <PlantView
           locale={locale}
           t={t}
-          qrCode={record.qr_code}
+          canPrint={record.status !== "draft"}
+          recordId={record.uuid}
+          qrCode={plantTagCode(record)}
           photos={photos ?? []}
           plant={{
             plantName: record.plant_name,
@@ -126,13 +129,6 @@ export default async function RecordDetail({
           <ChoiceField name="flower_fruit_traits" label={t.flowerFruit} options={flowerOptions(t)} value={record.flower_fruit_traits} otherLabel={t.otherDetail} required />
           <Input name="other_traits" label={t.otherTraits} defaultValue={record.other_traits} required />
           <button className="btn" type="submit">{t.submitAgain}</button>
-        </form>
-      )}
-
-      {!record.qr_code && (
-        <form action={generateQr} className="mt-4">
-          <input type="hidden" name="id" value={record.uuid} />
-          <button className="btn" type="submit">{t.generateQr}</button>
         </form>
       )}
     </main>

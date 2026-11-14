@@ -12,7 +12,8 @@ export function PrintQrButton({ qrCode, label }: { qrCode: string; label?: strin
   const [message, setMessage] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
-  if (profile?.role !== "botanist" || !qrCode) return null;
+  const canPrint = profile?.role === "botanist" || profile?.role === "conservation_officer";
+  if (!canPrint || !qrCode) return null;
 
   return (
     <View style={styles.wrap}>

@@ -122,6 +122,18 @@ export default async function PublicPlantPage({
   const resolved = await resolveCanonicalTag(supabase, code);
   const lookupCode = resolved?.qr_code || code;
 
+  if (resolved && resolved.status !== "approved") {
+    return (
+      <main className="mx-auto max-w-3xl px-4 pt-4 pb-16">
+        <BackPage href="/" label={t.backPage} />
+        <section className="mt-10 space-y-4">
+          <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">{t.plantPendingTitle}</h1>
+          <p className="max-w-xl text-base leading-7 text-neutral-600">{t.plantPendingBody}</p>
+        </section>
+      </main>
+    );
+  }
+
   if (resolved?.visibility === "rare") {
     const { profile } = await getSessionProfile();
     const staff = profile?.status === "active" && isStaffRole(profile.role);
@@ -152,27 +164,7 @@ export default async function PublicPlantPage({
     plant = await loadApprovedRecordAsPlant(supabase, code);
   }
 
-  if (!plant) {
-    const status = resolved?.status ?? null;
-    if (status && status !== "approved") {
-      return (
-        <main className="mx-auto max-w-3xl px-4 pt-4 pb-16">
-          <BackPage href="/" label={t.backPage} />
-          <section className="mt-10 space-y-4">
-            <p className="text-sm font-semibold tracking-wide text-forest uppercase">Plant tag</p>
-            <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">In Progress</h1>
-            <p className="max-w-xl text-base leading-7 text-neutral-600">
-              This plant tag is registered and waiting for review. Public details will appear here after a conservation
-              officer approves the record.
-            </p>
-            <p className="font-mono text-sm text-neutral-500">{code}</p>
-          </section>
-        </main>
-      );
-    }
-
-    notFound();
-  }
+  if (!plant) notFound();
 
   const photoCode = published?.qr_code || lookupCode;
   const { data: publicPhotos } = await supabase
