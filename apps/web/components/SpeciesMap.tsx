@@ -46,11 +46,12 @@ export function SpeciesMap({
       // Leaflet is a CommonJS package; depending on the bundler it arrives as `default` or as the module itself.
       const L = ((mod as unknown as { default?: typeof mod }).default ?? mod) as typeof mod;
       if (cancelled || !box.current) return;
-      map = L.map(box.current, { scrollWheelZoom: false }).setView(PARK_CENTER, 12);
+      const instance = L.map(box.current, { scrollWheelZoom: false }).setView(PARK_CENTER, 12);
+      map = instance;
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(map);
+      }).addTo(instance);
 
       const bounds: [number, number][] = [];
       for (const point of points) {
@@ -60,11 +61,11 @@ export function SpeciesMap({
           ? L.circle(at, { radius: 600, color: "#145c38", weight: 1, fillColor: "#145c38", fillOpacity: 0.25 })
           : L.circleMarker(at, { radius: 7, color: "#ffffff", weight: 2, fillColor: "#145c38", fillOpacity: 1 });
         layer.bindPopup(popupHtml(point, linkLabel));
-        layer.addTo(map);
+        layer.addTo(instance);
       }
 
-      if (bounds.length === 1) map.setView(bounds[0], approximate ? 13 : 15);
-      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
+      if (bounds.length === 1) instance.setView(bounds[0], approximate ? 13 : 15);
+      else if (bounds.length > 1) instance.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
     });
 
     return () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 type Decision = "approved" | "needs_revision" | "rejected";
 
@@ -126,7 +126,7 @@ export function ReviewDecisionForm({
         ) : null}
         {showNote ? (
           <textarea
-            ref={noteRef}
+            ref={noteRef as RefObject<HTMLTextAreaElement>}
             className="w-full rounded border px-2 py-1"
             name="review_note"
             rows={3}
@@ -134,7 +134,7 @@ export function ReviewDecisionForm({
             defaultValue={defaultNote}
           />
         ) : (
-          <input ref={noteRef} type="hidden" name="review_note" defaultValue="" />
+          <input ref={noteRef as RefObject<HTMLInputElement>} type="hidden" name="review_note" defaultValue="" />
         )}
         <div className={reviewHref ? "flex flex-wrap items-center justify-between gap-3 border-t border-emerald-950/10 pt-3" : "flex flex-wrap gap-2"}>
           <div className="flex flex-wrap gap-2">
