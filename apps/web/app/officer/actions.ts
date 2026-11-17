@@ -6,7 +6,7 @@ import { textOrNull } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { PHOTO_TOO_LARGE, PHOTO_WRONG_TYPE, uploadPlantPhoto } from "@/lib/photos";
 
-const REVIEW_STATUSES = ["approved", "needs_revision", "rejected"] as const;
+const REVIEW_STATUSES = ["approved", "needs_revision"] as const;
 
 function officerReturnPath(value: FormDataEntryValue | null) {
   const path = String(value ?? "").trim();
@@ -26,7 +26,7 @@ export async function reviewRecord(formData: FormData) {
   const destination = officerReturnPath(formData.get("next"));
   if (!REVIEW_STATUSES.includes(status as (typeof REVIEW_STATUSES)[number])) {
     const joiner = destination.includes("?") ? "&" : "?";
-    redirect(`${destination}${joiner}error=${encodeURIComponent("Choose approve, request changes, or reject.")}`);
+    redirect(`${destination}${joiner}error=${encodeURIComponent("Choose approve or request changes.")}`);
   }
 
   const { data: record } = await supabase
@@ -48,7 +48,7 @@ export async function reviewRecord(formData: FormData) {
     (status === "approved" ? `plant-${id.slice(0, 8)}` : record.qr_code);
 
   const note = textOrNull(formData.get("review_note"));
-  if ((status === "needs_revision" || status === "rejected") && !note) {
+  if (status === "needs_revision" && !note) {
     const { t } = await getCopy();
     const joiner = destination.includes("?") ? "&" : "?";
     redirect(`${destination}${joiner}error=${encodeURIComponent(t.feedbackMissing)}`);

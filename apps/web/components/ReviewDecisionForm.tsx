@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
-type Decision = "approved" | "needs_revision" | "rejected";
+type Decision = "approved" | "needs_revision";
 
 export function ReviewDecisionForm({
   action,
@@ -33,14 +33,12 @@ export function ReviewDecisionForm({
     reviewFull: string;
     approve: string;
     requestChanges: string;
-    reject: string;
     confirm: string;
     cancel: string;
     confirmApproveTitle: string;
     confirmApproveBody: string;
     feedbackRequiredTitle: string;
     feedbackRequiredChanges: string;
-    feedbackRequiredReject: string;
   };
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -101,7 +99,7 @@ export function ReviewDecisionForm({
     submit(pending, text);
   }
 
-  const needsNote = pending === "needs_revision" || pending === "rejected";
+  const needsNote = pending === "needs_revision";
   const noteReady = draft.trim().length > 0;
 
   return (
@@ -144,9 +142,6 @@ export function ReviewDecisionForm({
             <button className="inline-flex h-9 items-center rounded-lg border border-emerald-950/15 bg-white px-3 text-sm font-semibold text-emerald-950" type="button" onClick={() => ask("needs_revision")}>
               {labels.requestChanges}
             </button>
-            <button className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-800" type="button" onClick={() => ask("rejected")}>
-              {labels.reject}
-            </button>
           </div>
           {reviewHref ? (
             <Link className="inline-flex h-9 items-center rounded-lg border border-forest bg-white px-3 text-sm font-semibold text-forest" href={reviewHref}>
@@ -171,9 +166,7 @@ export function ReviewDecisionForm({
         {needsNote ? (
           <>
             <h2 className="text-lg font-semibold">{labels.feedbackRequiredTitle}</h2>
-            <p className="mt-2 text-sm text-neutral-700">
-              {pending === "rejected" ? labels.feedbackRequiredReject : labels.feedbackRequiredChanges}
-            </p>
+            <p className="mt-2 text-sm text-neutral-700">{labels.feedbackRequiredChanges}</p>
             <label className="mt-3 block text-sm font-medium">
               {labels.noteToBotanist}
               <textarea
@@ -191,12 +184,12 @@ export function ReviewDecisionForm({
             {labels.cancel}
           </button>
           <button
-            className={pending === "rejected" ? "rounded bg-red-700 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50" : "btn disabled:opacity-50"}
+            className="btn disabled:opacity-50"
             type="button"
             disabled={needsNote && !noteReady}
             onClick={confirmPending}
           >
-            {pending === "needs_revision" ? labels.requestChanges : pending === "rejected" ? labels.reject : labels.confirm}
+            {pending === "needs_revision" ? labels.requestChanges : labels.confirm}
           </button>
         </div>
       </div>

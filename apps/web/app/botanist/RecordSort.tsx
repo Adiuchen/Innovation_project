@@ -57,8 +57,8 @@ export function RecordSort({
   }
 
   return (
-    <>
-      <div className="mt-4 flex shrink-0 flex-wrap items-center gap-2 text-sm">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-emerald-950/15 bg-white shadow-sm">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-emerald-950/10 px-3 py-3 text-sm">
         <label className="flex items-center gap-2">
           {label}
           <select
@@ -74,49 +74,49 @@ export function RecordSort({
           </select>
         </label>
         <input
-          className="min-w-48 flex-1 rounded border px-2 py-1 sm:max-w-xs"
+          className="min-w-40 flex-1 rounded border px-2 py-1"
           value={text}
           placeholder={placeholder}
           onChange={(event) => setText(event.target.value)}
         />
       </div>
-      <div className="mt-4 mb-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-emerald-950/15 bg-white shadow-sm">
-        <div className="h-full overflow-auto">
-          <table className="w-full table-fixed text-sm">
-            <thead className="sticky top-0 z-10">
-              <tr className="border-b bg-emerald-50 text-left text-forest">
-                <th className="w-[24%] p-3 font-medium">{columns.name}</th>
-                <th className="w-[18%] p-3 font-medium">{columns.place}</th>
-                <th className="w-48 p-3 font-medium">{columns.status}</th>
-                <th className="p-3 font-medium">{columns.review}</th>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full table-fixed text-sm">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b bg-emerald-50 text-left text-forest">
+              <th className="w-[34%] p-3 font-medium">{columns.name}</th>
+              <th className="w-[22%] p-3 font-medium">{columns.place}</th>
+              <th className="w-36 p-3 font-medium">{columns.status}</th>
+              <th className="p-3 font-medium">{columns.review}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => (
+              <tr key={row.id} className={`border-b last:border-0 ${row.attention ? "bg-amber-50" : ""}`}>
+                <td className="p-3">
+                  <Link className="font-medium hover:underline" href={`/botanist/${row.uuid}`}>{row.title}</Link>
+                </td>
+                <td className="p-3">{row.place}</td>
+                <td className="p-3 whitespace-nowrap">
+                  <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${statusTone(row.status)}`}>
+                    {row.statusLabel}
+                  </span>
+                </td>
+                <td className="p-3">
+                  <span className="line-clamp-2">{row.review}</span>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {visible.map((row) => (
-                <tr key={row.id} className={`border-b last:border-0 ${row.attention ? "bg-amber-50" : ""}`}>
-                  <td className="p-3">
-                    <Link className="font-medium hover:underline" href={`/botanist/${row.uuid}`}>{row.title}</Link>
-                  </td>
-                  <td className="p-3">{row.place}</td>
-                  <td className="p-3 whitespace-nowrap">
-                    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${statusTone(row.status)}`}>
-                      {row.statusLabel}
-                    </span>
-                  </td>
-                  <td className="p-3">{row.review}</td>
-                </tr>
-              ))}
-              {visible.length === 0 && (
-                <tr>
-                  <td className="p-3 text-neutral-500" colSpan={4}>
-                    {term ? noMatchesLabel : emptyLabel}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {visible.length === 0 && (
+              <tr>
+                <td className="p-3 text-neutral-500" colSpan={4}>
+                  {term ? noMatchesLabel : emptyLabel}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-    </>
+    </div>
   );
 }

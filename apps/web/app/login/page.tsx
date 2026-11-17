@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackPage } from "@/components/BackPage";
 import { BrandMark } from "@/components/BrandMark";
 import { getCopy } from "@/lib/i18n";
 import { login } from "./actions";
@@ -13,7 +14,8 @@ export default async function LoginPage({
 
   return (
     <main className="mx-auto max-w-md px-4 py-10">
-      <div className="surface w-full p-8">
+      <BackPage href="/" label={t.back} />
+      <div className="surface mt-4 w-full p-8">
         <BrandMark className="h-11 w-11" />
         <h1 className="mt-4 text-2xl font-semibold">{t.login}</h1>
         <p className="mt-2 text-sm text-neutral-600">{t.loginIntro}</p>

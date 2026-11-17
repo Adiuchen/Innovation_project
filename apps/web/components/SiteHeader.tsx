@@ -22,9 +22,6 @@ export async function SiteHeader() {
         <nav className="flex flex-wrap items-center gap-1 text-sm">
           {profile ? (
             <>
-              <Link href="/dashboard" className="rounded-full px-3 py-1.5 hover:bg-emerald-50">
-                {t.dashboard}
-              </Link>
               {changeCount > 0 && (
                 <Link href="/botanist#notices" className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-950">
                   {changeCount} {t.recordsToUpdate}

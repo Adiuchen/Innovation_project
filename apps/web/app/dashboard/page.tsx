@@ -5,30 +5,30 @@ import { requireUser, type Profile } from "@/lib/auth";
 import { getCopy, statusText, type Copy } from "@/lib/i18n";
 import { updatesSchemaMissing } from "@/lib/plant-update";
 
-function cards(t: Copy): Record<Profile["role"], { href: string; title: string; text: string }[]> {
+function cards(t: Copy): Record<Profile["role"], { href: string; title: string }[]> {
   return {
     botanist: [
-      { href: "/botanist", title: t.myRecords, text: t.myRecordsText },
-      { href: "/botanist/new", title: t.newRecord, text: t.newRecordText },
-      { href: "/botanist/plants", title: t.viewPlants, text: t.viewPlantsText },
-      { href: "/botanist/iot", title: t.iotDashboard, text: t.officerIotText },
+      { href: "/botanist", title: t.myRecords },
+      { href: "/botanist/new", title: t.newRecord },
+      { href: "/botanist/plants", title: t.viewPlants },
+      { href: "/botanist/iot", title: t.iotDashboard },
     ],
     conservation_officer: [
-      { href: "/officer", title: t.reviewRecords, text: t.reviewRecordsText },
-      { href: "/officer/plants", title: t.viewPlants, text: t.viewPlantsText },
-      { href: "/officer/species", title: t.species, text: t.speciesText },
-      { href: "/officer/map", title: t.map, text: t.mapText },
-      { href: "/officer/iot", title: t.iotDashboard, text: t.officerIotText },
-      { href: "/officer/events", title: t.events, text: t.eventsText },
+      { href: "/officer", title: t.reviewRecords },
+      { href: "/officer/plants", title: t.viewPlants },
+      { href: "/officer/species", title: t.species },
+      { href: "/officer/map", title: t.map },
+      { href: "/officer/iot", title: t.iotDashboard },
+      { href: "/officer/events", title: t.events },
     ],
     administrator: [
-      { href: "/admin", title: t.manageUsers, text: t.manageUsersText },
-      { href: "/admin/events", title: t.events, text: t.adminEventsText },
-      { href: "/admin/iot", title: t.iot, text: t.iotText },
+      { href: "/admin", title: t.manageUsers },
+      { href: "/admin/events", title: t.events },
+      { href: "/admin/iot", title: t.iot },
     ],
     guide: [
-      { href: "/guide", title: t.speciesGuide, text: t.speciesGuideText },
-      { href: "/", title: t.findSpecies, text: t.findPlantText },
+      { href: "/guide", title: t.speciesGuide },
+      { href: "/", title: t.findSpecies },
     ],
     visitor: [],
   };
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
         </p>
       </section>
       {profile.role === "botanist" && (
-        <PrepareFieldCache readyLabel={t.fieldPhoneReady} failedLabel={t.fieldPhoneFailed} />
+        <PrepareFieldCache quiet readyLabel={t.fieldPhoneReady} failedLabel={t.fieldPhoneFailed} />
       )}
       <ul className={`mt-6 grid items-stretch gap-3 ${items.length >= 6 ? "grid-cols-2 lg:grid-cols-3" : items.length >= 5 ? "grid-cols-2 lg:grid-cols-5" : items.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
         {items.map((item) => {
@@ -82,7 +82,7 @@ export default async function DashboardPage() {
             <li key={item.href} className="h-full">
               <Link
                 href={item.href}
-                className={`relative block h-full rounded-2xl border px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${badge > 0 ? "border-amber-200 bg-amber-50 pr-8" : "border-emerald-950/10 bg-white"}`}
+                className={`relative flex h-full min-h-[4.75rem] items-center justify-center rounded-2xl border px-4 py-3 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${badge > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-950/10 bg-white"}`}
               >
                 {badge > 0 && (
                   <span className="absolute right-2.5 top-2.5 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
@@ -90,7 +90,6 @@ export default async function DashboardPage() {
                   </span>
                 )}
                 <span className="font-medium">{item.title}</span>
-                <span className="mt-0.5 block text-sm leading-5 text-neutral-600">{item.text}</span>
               </Link>
             </li>
           );
