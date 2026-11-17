@@ -1,11 +1,17 @@
 import type { ReactNode } from "react";
-import type { ColorValue } from "react-native";
+import { StyleSheet, View, type ColorValue } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
-type IconProps = { color: ColorValue; size?: number };
+type IconProps = { color: ColorValue; size?: number; filled?: boolean };
 
 function ink(color: ColorValue) {
   return typeof color === "string" ? color : "#1e4d38";
+}
+
+const mark = "#f7fbf8";
+
+export function TabSlot({ focused, background, children }: { focused: boolean; background: string; children: ReactNode }) {
+  return <View style={[styles.slot, focused && { backgroundColor: background }]}>{children}</View>;
 }
 
 function Icon({ size = 24, children }: IconProps & { children: ReactNode }) {
@@ -18,29 +24,48 @@ function Icon({ size = 24, children }: IconProps & { children: ReactNode }) {
 
 const stroke = { strokeWidth: 1.75, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-export function HomeTabIcon({ color, size }: IconProps) {
+export function HomeTabIcon({ color, size, filled }: IconProps) {
+  const tone = ink(color);
   return (
     <Icon color={color} size={size}>
-      <Path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1Z" stroke={ink(color)} {...stroke} />
+      <Path
+        d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1Z"
+        fill={filled ? tone : "none"}
+        stroke={tone}
+        {...stroke}
+      />
     </Icon>
   );
 }
 
-export function RecordsTabIcon({ color, size }: IconProps) {
+export function RecordsTabIcon({ color, size, filled }: IconProps) {
+  const tone = ink(color);
+  const line = filled ? mark : tone;
   return (
     <Icon color={color} size={size}>
-      <Path d="M7 3.5h7.2L18.5 8v12a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" stroke={ink(color)} {...stroke} />
-      <Path d="M14 3.6V8h4.4" stroke={ink(color)} {...stroke} />
-      <Path d="M9 12.5h6M9 16h6" stroke={ink(color)} {...stroke} />
+      <Path
+        d="M7 3.5h7.2L18.5 8v12a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"
+        fill={filled ? tone : "none"}
+        stroke={tone}
+        {...stroke}
+      />
+      <Path d="M14 3.6V8h4.4" stroke={line} {...stroke} />
+      <Path d="M9 12.5h6M9 16h6" stroke={line} {...stroke} />
     </Icon>
   );
 }
 
-export function PlantsTabIcon({ color, size }: IconProps) {
+export function PlantsTabIcon({ color, size, filled }: IconProps) {
+  const tone = ink(color);
   return (
     <Icon color={color} size={size}>
-      <Path d="M5 19.5c7.5-1 11.5-7.2 12.5-14.5-6.2.8-12.2 4.6-12.5 14.5Z" stroke={ink(color)} {...stroke} />
-      <Path d="M9.2 15.2c1.8-2.2 3.8-4.6 6-7.2" stroke={ink(color)} {...stroke} />
+      <Path
+        d="M5 19.5c7.5-1 11.5-7.2 12.5-14.5-6.2.8-12.2 4.6-12.5 14.5Z"
+        fill={filled ? tone : "none"}
+        stroke={tone}
+        {...stroke}
+      />
+      <Path d="M9.2 15.2c1.8-2.2 3.8-4.6 6-7.2" stroke={filled ? mark : tone} {...stroke} />
     </Icon>
   );
 }
@@ -57,11 +82,23 @@ export function ScanTabIcon({ color, size }: IconProps) {
   );
 }
 
-export function SpeciesTabIcon({ color, size }: IconProps) {
+export function SpeciesTabIcon({ color, size, filled }: IconProps) {
+  const tone = ink(color);
   return (
     <Icon color={color} size={size}>
-      <Path d="M5 4.5h5.5A2.5 2.5 0 0 1 13 7v13a2 2 0 0 0-2-2H5Z" stroke={ink(color)} {...stroke} />
-      <Path d="M19 4.5h-5.5A2.5 2.5 0 0 0 11 7v13a2 2 0 0 1 2-2h6Z" stroke={ink(color)} {...stroke} />
+      <Path d="M5 4.5h5.5A2.5 2.5 0 0 1 13 7v13a2 2 0 0 0-2-2H5Z" fill={filled ? tone : "none"} stroke={filled ? mark : tone} {...stroke} />
+      <Path d="M19 4.5h-5.5A2.5 2.5 0 0 0 11 7v13a2 2 0 0 1 2-2h6Z" fill={filled ? tone : "none"} stroke={filled ? mark : tone} {...stroke} />
     </Icon>
   );
 }
+
+const styles = StyleSheet.create({
+  slot: {
+    minWidth: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+});

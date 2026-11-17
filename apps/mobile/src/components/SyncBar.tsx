@@ -33,8 +33,8 @@ const words = {
 };
 
 /**
- * Always-visible connection and upload status, shown at the top of every tab.
- * Botanists can tap it to upload waiting records.
+ * Connection and upload status for the times it changes what you can do.
+ * Hidden while everything is already on the server. Botanists can tap it to upload.
  */
 export function SyncBar() {
   const { online, pending, syncing, syncNow, profile } = useAuth();

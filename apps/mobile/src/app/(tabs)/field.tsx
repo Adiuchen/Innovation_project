@@ -15,6 +15,13 @@ import type { CachedRecord, Draft } from "@/types";
 
 export default function FieldHome() {
   const { profile, online, pending, notice, syncing, syncNow, version } = useAuth();
+  const syncBarVisible = syncing || !online || pending > 0;
+  const statusNote =
+    notice &&
+    notice !== "Working from the copy saved on this phone." &&
+    notice !== "Field data is up to date."
+      ? notice
+      : null;
   const { locale, palette, t } = usePreferences();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const [records, setRecords] = useState<CachedRecord[]>([]);
@@ -43,10 +50,9 @@ export default function FieldHome() {
 
   if (!profile) return null;
   const botanist = profile.role === "botanist";
-  const statusLine = !online ? t.offline : notice || t.connected;
 
   return (
-    <SafeAreaView style={styles.screen} edges={[]}>
+    <SafeAreaView style={styles.screen} edges={syncBarVisible ? [] : ["top"]}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -73,7 +79,7 @@ export default function FieldHome() {
           <AvatarMenu name={profile.name} staffId={profile.id} />
         </View>
 
-        <Text style={styles.status}>{statusLine}</Text>
+        {statusNote ? <Notice>{statusNote}</Notice> : null}
 
         {botanist ? (
           <Pressable
@@ -197,7 +203,6 @@ function makeStyles(colors: Palette) {
     justifyContent: "center",
   },
   avatarText: { color: "#f4f7f2", fontSize: 22, fontWeight: "700" },
-  status: { color: colors.muted, fontSize: 14 },
   primary: {
     minHeight: 52,
     borderRadius: 16,

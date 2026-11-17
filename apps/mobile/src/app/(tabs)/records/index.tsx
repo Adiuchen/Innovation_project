@@ -71,11 +71,29 @@ export default function RecordsScreen() {
     });
   }, [query, records, sort]);
 
-  const attention = useMemo(
-    () => records.filter((item) => item.status === "needs_revision" || item.status === "rejected"),
-    [records],
-  );
-  const noticeCount = profile?.role === "botanist" ? attention.length + updates.length : 0;
+  const botanist = profile?.role === "botanist";
+  const matchingUpdates = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return updates;
+    return updates.filter((item) => {
+      const record = records.find((row) => row.uuid === item.plantRecordId);
+      const blob = `${record?.code ?? ""} ${item.plantName} ${record?.plant_name ?? ""} ${record?.location_name ?? ""}`.toLowerCase();
+      return blob.includes(needle);
+    });
+  }, [query, records, updates]);
+  const attention = useMemo(() => {
+    if (!botanist) return [];
+    const covered = new Set(matchingUpdates.map((item) => item.plantRecordId));
+    return visible.filter(
+      (item) => (item.status === "needs_revision" || item.status === "rejected") && !covered.has(item.uuid),
+    );
+  }, [botanist, matchingUpdates, visible]);
+  const filed = useMemo(() => {
+    if (!botanist) return visible;
+    return visible.filter((item) => item.status !== "needs_revision" && item.status !== "rejected");
+  }, [botanist, visible]);
+  const toFix = attention.length + matchingUpdates.filter((item) => item.status !== "submitted").length;
+  const noticeCount = botanist ? attention.length + matchingUpdates.length : 0;
 
   if (!profile) return null;
 
@@ -122,19 +140,21 @@ export default function RecordsScreen() {
         })}
       </View>
       <Text style={styles.count}>
-        {visible.length} {visible.length === 1 ? t.record : t.records}
+        {toFix > 0 ? `${toFix} ${t.toFix} · ` : ""}
+        {filed.length} {filed.length === 1 ? t.record : t.records}
       </Text>
-      {updateError && updates.length === 0 ? <Notice tone="warn">{updateError}</Notice> : null}
+      {updateError && matchingUpdates.length === 0 ? <Notice tone="warn">{updateError}</Notice> : null}
       {noticeCount > 0 && (
         <View style={styles.block}>
           <View style={styles.noticeHead}>
             <Text style={styles.heading}>{t.notices}</Text>
             <Text style={styles.countBadge}>{noticeCount}</Text>
           </View>
-          {updates.map((item) => {
-            const code = records.find((record) => record.uuid === item.plantRecordId)?.code;
-            const label = [code, item.plantName].filter(Boolean).join(" · ");
+          {matchingUpdates.map((item) => {
+            const record = records.find((row) => row.uuid === item.plantRecordId);
+            const label = [record?.code, item.plantName].filter(Boolean).join(" · ");
             const waiting = item.status === "submitted";
+            const when = record?.recorded_at ? formatWhen(record.recorded_at) : "";
             return (
               <Pressable
                 key={item.uuid}
@@ -151,22 +171,31 @@ export default function RecordsScreen() {
                       })
                 }
               >
-                <Text style={styles.noticeName} numberOfLines={1}>
-                  {label || t.updatesRequested}
-                </Text>
-                <Text style={styles.open}>{waiting ? t.updateWaiting : t.openUpdate}</Text>
+                <View style={styles.noticeCopy}>
+                  <Text style={styles.noticeName} numberOfLines={1}>
+                    {label || t.updatesRequested}
+                  </Text>
+                  {when ? <Text style={styles.noticeWhen}>{when}</Text> : null}
+                </View>
+                <Text style={styles.open}>{waiting ? t.updateWaiting : t.fix}</Text>
               </Pressable>
             );
           })}
-          {attention.map((item) => (
-            <Pressable key={item.uuid} style={styles.noticeCard} onPress={() => router.push(`/records/${item.uuid}`)}>
-              <Text style={styles.noticeName} numberOfLines={1}>
-                {item.code ? `${item.code} · ` : ""}
-                {recordName(item.plant_name, item.species_name)}
-              </Text>
-              <Badge status={item.status} />
-            </Pressable>
-          ))}
+          {attention.map((item) => {
+            const when = item.recorded_at ? formatWhen(item.recorded_at) : "";
+            return (
+              <Pressable key={item.uuid} style={styles.noticeCard} onPress={() => router.push(`/records/${item.uuid}`)}>
+                <View style={styles.noticeCopy}>
+                  <Text style={styles.noticeName} numberOfLines={1}>
+                    {item.code ? `${item.code} · ` : ""}
+                    {recordName(item.plant_name, item.species_name)}
+                  </Text>
+                  {when ? <Text style={styles.noticeWhen}>{when}</Text> : null}
+                </View>
+                <Text style={styles.open}>{t.fix}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
       {drafts.length > 0 && (
@@ -212,27 +241,20 @@ export default function RecordsScreen() {
           ))}
         </View>
       )}
-      {visible.map((item) => {
-        const needsAttention = item.status === "needs_revision" || item.status === "rejected";
-        return (
-          <Pressable
-            key={item.uuid}
-            style={[styles.row, needsAttention && styles.attentionRow]}
-            onPress={() => router.push(`/records/${item.uuid}`)}
-          >
-            <Text style={styles.name}>
-              {item.code ? `${item.code} · ` : ""}
-              {recordName(item.plant_name, item.species_name)}
-            </Text>
-            <Muted>
-              {item.location_name || "No place name"}
-              {item.recorded_at ? ` · ${formatWhen(item.recorded_at)}` : ""}
-            </Muted>
-            <Badge status={item.status} />
-          </Pressable>
-        );
-      })}
-      {visible.length === 0 && (
+      {filed.map((item) => (
+        <Pressable key={item.uuid} style={styles.row} onPress={() => router.push(`/records/${item.uuid}`)}>
+          <Text style={styles.name}>
+            {item.code ? `${item.code} · ` : ""}
+            {recordName(item.plant_name, item.species_name)}
+          </Text>
+          <Muted>
+            {item.location_name || "No place name"}
+            {item.recorded_at ? ` · ${formatWhen(item.recorded_at)}` : ""}
+          </Muted>
+          <Badge status={item.status} />
+        </Pressable>
+      ))}
+      {filed.length === 0 && noticeCount === 0 && (
         <Notice>
           {records.length === 0
             ? profile.role === "botanist"
@@ -293,9 +315,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  noticeName: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: "600" },
+  noticeCopy: { flex: 1, gap: 2 },
+  noticeName: { color: colors.ink, fontSize: 15, fontWeight: "600" },
+  noticeWhen: { color: colors.muted, fontSize: 13 },
   open: { color: colors.warning, fontSize: 13, fontWeight: "700" },
-  attentionRow: { borderColor: "#e7c98a", backgroundColor: colors.warningBg },
   draftRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   draftMain: { flex: 1, gap: 4 },
   deleteButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.dangerBg },

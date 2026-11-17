@@ -1,8 +1,9 @@
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
+import { Text } from "react-native";
 import { SyncBar } from "@/components/SyncBar";
 import { ScanTabButtonIcon } from "@/components/ScanTabButton";
-import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, SpeciesTabIcon } from "@/components/TabIcon";
+import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, SpeciesTabIcon, TabSlot } from "@/components/TabIcon";
 import { useAuth } from "@/lib/auth";
 import { listRecords } from "@/lib/db";
 import { listOpenPlantUpdates } from "@/lib/plant-updates";
@@ -21,7 +22,7 @@ const offTabBar = {
 
 export default function TabLayout() {
   const { palette, t } = usePreferences();
-  const { profile, version, pending } = useAuth();
+  const { profile, version, pending, online, syncing } = useAuth();
   const [attention, setAttention] = useState(0);
 
   useEffect(() => {
@@ -47,8 +48,9 @@ export default function TabLayout() {
       // Match unstable_settings.anchor ("field") so Android/system back reaches Home instead of a dead GO_BACK.
       backBehavior="initialRoute"
       screenOptions={{
-        // The sync bar sits where a header would, so it handles the top safe area for every tab.
-        headerShown: true,
+        // A healthy sync needs no banner. The bar only appears when the phone is offline,
+        // a sync is running, or records are waiting, and then it owns the top safe area.
+        headerShown: syncing || !online || pending > 0,
         header: () => <SyncBar />,
         tabBarActiveTintColor: palette.forest,
         tabBarInactiveTintColor: palette.muted,
@@ -57,18 +59,31 @@ export default function TabLayout() {
           borderTopColor: "transparent",
           elevation: 0,
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
+        tabBarLabel: ({ focused, color, children }) => (
+          <Text style={{ color, fontSize: 12, fontWeight: focused ? "700" : "500" }}>{children}</Text>
+        ),
       }}
     >
       <Tabs.Screen
         name="field"
-        options={{ title: t.homeTab, tabBarIcon: ({ color, size }) => <HomeTabIcon color={color} size={size} /> }}
+        options={{
+          title: t.homeTab,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabSlot focused={focused} background={palette.okBg}>
+              <HomeTabIcon color={color} size={size} filled={focused} />
+            </TabSlot>
+          ),
+        }}
       />
       <Tabs.Screen
         name="records"
         options={{
           title: t.recordsTab,
-          tabBarIcon: ({ color, size }) => <RecordsTabIcon color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabSlot focused={focused} background={palette.okBg}>
+              <RecordsTabIcon color={color} size={size} filled={focused} />
+            </TabSlot>
+          ),
           tabBarBadge: attention > 0 ? attention : undefined,
           tabBarBadgeStyle: { backgroundColor: "#dc2626", color: "#fff" },
         }}
@@ -87,11 +102,25 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="plants"
-        options={{ title: t.plantsTab, tabBarIcon: ({ color, size }) => <PlantsTabIcon color={color} size={size} /> }}
+        options={{
+          title: t.plantsTab,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabSlot focused={focused} background={palette.okBg}>
+              <PlantsTabIcon color={color} size={size} filled={focused} />
+            </TabSlot>
+          ),
+        }}
       />
       <Tabs.Screen
         name="species"
-        options={{ title: t.species, tabBarIcon: ({ color, size }) => <SpeciesTabIcon color={color} size={size} /> }}
+        options={{
+          title: t.species,
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabSlot focused={focused} background={palette.okBg}>
+              <SpeciesTabIcon color={color} size={size} filled={focused} />
+            </TabSlot>
+          ),
+        }}
       />
       <Tabs.Screen name="events" options={offTabBar} />
     </Tabs>

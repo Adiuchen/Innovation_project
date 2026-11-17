@@ -212,11 +212,6 @@ function EventPage({
                 {formatParkWhen(event.starts_at, event.ends_at, locale)}
                 {event.location_name ? ` · ${event.location_name}` : ""}
               </Text>
-              {event.description ? (
-                <Text style={styles.quiet} numberOfLines={2}>
-                  {event.description}
-                </Text>
-              ) : null}
             </View>
             <View style={[styles.view, pressed && styles.viewPressed]}>
               <Text style={[styles.viewText, pressed && styles.viewTextPressed]}>{viewLabel}</Text>
