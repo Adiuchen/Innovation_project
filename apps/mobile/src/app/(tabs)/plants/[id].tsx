@@ -86,11 +86,6 @@ function ApprovedPlantBody({ plantId }: { plantId: string }) {
           </View>
         ) : null}
       </View>
-      {plant.qr_code ? (
-        <Text style={styles.publicPage}>
-          {t.publicPage}: /p/{plant.qr_code}
-        </Text>
-      ) : null}
       <View style={styles.pills}>
         {plant.conservation_status ? <Text style={styles.pill}>{plant.conservation_status}</Text> : null}
         {health ? <Text style={styles.pill}>{health}</Text> : null}
@@ -160,7 +155,6 @@ const styles = StyleSheet.create({
   name: { fontSize: 32, fontWeight: "700", color: colors.ink },
   scientific: { color: colors.ink, fontSize: 18, fontStyle: "italic" },
   subtitle: { color: colors.muted, fontSize: 16 },
-  publicPage: { color: colors.muted, fontSize: 14 },
   qrBadge: {
     position: "absolute",
     right: 12,

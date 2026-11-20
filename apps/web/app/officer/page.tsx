@@ -5,6 +5,7 @@ import { ReviewToast } from "@/components/ReviewToast";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
 import { healthLabels, optionLabel } from "@/lib/field-choices";
+import { staffLabel } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { reviewNotice } from "@/lib/review-notice";
 import { updatesSchemaMissing } from "@/lib/plant-update";
@@ -21,7 +22,7 @@ export default async function OfficerHome({
 
   let request = supabase
     .from("plant_records")
-    .select("uuid, id, plant_name, status, location_name, latitude, longitude, recorded_at, health_status, review_note, species(scientific_name, common_name), profiles!plant_records_botanist_id_fkey(name)")
+    .select("uuid, id, plant_name, status, location_name, latitude, longitude, recorded_at, health_status, review_note, species(scientific_name, common_name), profiles!plant_records_botanist_id_fkey(id, name)")
     .order("recorded_at", { ascending: false });
 
   if (status && status !== "all") request = request.eq("status", status);
@@ -108,7 +109,7 @@ export default async function OfficerHome({
                 <StatusBadge status={record.status} />
               </div>
               <p className="mt-1 text-sm text-neutral-600">
-                {species?.common_name || t.noCommonName} · {botanist?.name || t.unknownBotanist}
+                {species?.common_name || t.noCommonName} · {staffLabel(botanist, t.unknownBotanist)}
               </p>
               <p className="mt-1 text-sm text-neutral-800">
                 {record.location_name || t.noPlaceName}

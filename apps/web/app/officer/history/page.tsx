@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeading } from "@/components/PageHeading";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requireUser } from "@/lib/auth";
+import { staffLabel } from "@/lib/format";
 import { getCopy, type Locale } from "@/lib/i18n";
 
 const KINDS = ["all", "approved", "rejected", "changes"] as const;
@@ -31,7 +32,7 @@ export default async function OfficerHistory({
   const { data: records, error } = await supabase
     .from("plant_records")
     .select(
-      "uuid, id, plant_name, status, location_name, reviewed_at, review_note, species(scientific_name, common_name), profiles!plant_records_botanist_id_fkey(name), reviewer:profiles!plant_records_reviewed_by_fkey(id, name)",
+      "uuid, id, plant_name, status, location_name, reviewed_at, review_note, species(scientific_name, common_name), profiles!plant_records_botanist_id_fkey(id, name), reviewer:profiles!plant_records_reviewed_by_fkey(id, name)",
     )
     .in("status", ["approved", "rejected", "needs_revision", "submitted"])
     .order("reviewed_at", { ascending: false });
@@ -95,7 +96,7 @@ export default async function OfficerHistory({
                   {" · "}
                   {species?.common_name || t.noCommonName}
                   {" · "}
-                  {botanist?.name || t.unknownBotanist}
+                  {staffLabel(botanist, t.unknownBotanist)}
                   {" · "}
                   {record.location_name || t.noPlaceName}
                   {" · "}

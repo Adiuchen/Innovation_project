@@ -6,6 +6,7 @@ import { ReviewToast } from "@/components/ReviewToast";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StickyBar } from "@/components/StickyBar";
 import { requireUser } from "@/lib/auth";
+import { staffLabel } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { plantTagCode } from "@/lib/plant-access";
 import { reviewNotice } from "@/lib/review-notice";
@@ -26,7 +27,7 @@ export default async function OfficerRecordPage({
   const { data: record, error: queryError } = await supabase
     .from("plant_records")
     .select(
-      "uuid, id, qr_code, local_id, plant_name, life_stage, status, location_name, latitude, longitude, recorded_at, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, review_note, species(scientific_name, common_name, local_name, family, genus, conservation_status, distribution, description, ecological_info, cultural_significance), profiles!plant_records_botanist_id_fkey(name)",
+      "uuid, id, qr_code, local_id, plant_name, life_stage, status, location_name, latitude, longitude, recorded_at, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, review_note, species(scientific_name, common_name, local_name, family, genus, conservation_status, distribution, description, ecological_info, cultural_significance), profiles!plant_records_botanist_id_fkey(id, name)",
     )
     .eq("uuid", id)
     .maybeSingle();
@@ -97,7 +98,7 @@ export default async function OfficerRecordPage({
             heightM: record.height_m,
             health: record.health_status,
             recordedAt: record.recorded_at,
-            recordedBy: botanist?.name ?? null,
+            recordedBy: staffLabel(botanist, "") || null,
           }}
         />
       </div>

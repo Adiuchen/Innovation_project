@@ -11,6 +11,8 @@ export async function GET(
   const { id } = await params;
   const supabase = await createClient();
   const storagePath = await findStoragePath(supabase, id);
+  const external = externalImage(storagePath);
+  if (external) return external;
   const path = storagePath ? storageObjectPath(storagePath) : "";
   if (!path) return new NextResponse("Not found", { status: 404 });
 
@@ -47,4 +49,28 @@ async function findStoragePath(
     }
   }
   return null;
+}
+
+function externalImage(storagePath: string | null) {
+  if (!storagePath || !/^https:\/\//i.test(storagePath)) return null;
+  let url: URL;
+  try {
+    url = new URL(storagePath);
+  } catch {
+    return null;
+  }
+  if (!/\.(jpe?g|png|gif|webp)$/i.test(url.pathname)) return null;
+  return fetch(url, {
+    headers: { "User-Agent": "PlantRecords/1.0 (university field catalogue)" },
+    redirect: "follow",
+  }).then(async (response) => {
+    if (!response.ok) return new NextResponse("Not found", { status: 404 });
+    const type = response.headers.get("content-type") || "";
+    return new NextResponse(new Uint8Array(await response.arrayBuffer()), {
+      headers: {
+        "Content-Type": type.startsWith("image/") ? type : imageContentType(url.pathname),
+        "Cache-Control": "public, max-age=86400",
+      },
+    });
+  });
 }

@@ -14,6 +14,16 @@ export function textOrNull(value: FormDataEntryValue | string | null) {
   return text || null;
 }
 
+export function staffLabel(
+  person: { name?: string | null; id?: string | null } | null | undefined,
+  fallback: string,
+) {
+  const name = person?.name?.trim() || "";
+  const id = person?.id?.trim() || "";
+  if (name && id) return `${name} (${id})`;
+  return name || id || fallback;
+}
+
 const PARK_ZONE = "Asia/Kuala_Lumpur";
 
 export function parseParkDateTime(value: FormDataEntryValue | string | null) {

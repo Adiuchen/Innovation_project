@@ -23,6 +23,17 @@ function nextLoginId(emails: Array<string | null>, role: string) {
   return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
 
+function bumpLoginId(loginId: string) {
+  const match = /^([A-Za-z]+)(\d+)$/.exec(loginId);
+  if (!match) return loginId;
+  const next = Number(match[2]) + 1;
+  return `${match[1]}${String(next).padStart(match[2].length, "0")}`;
+}
+
+function loginAlreadyUsed(message: string) {
+  return /already registered|already exists|already been registered/i.test(message);
+}
+
 export async function createAccount(formData: FormData) {
   const { supabase } = await requireUser(["administrator"]);
   const password = String(formData.get("password") || "");
@@ -40,7 +51,10 @@ export async function createAccount(formData: FormData) {
   }
 
   const { data: existing } = await supabase.from("profiles").select("id");
-  const loginId = nextLoginId((existing ?? []).map((row) => row.id), role);
+  // profiles does not list Authentication logins. A previous officer can leave
+  // o001@staff.plantrecords.com behind with no profile row, and signUp then
+  // reports that this "new" id already exists. Skip those logins.
+  let loginId = nextLoginId((existing ?? []).map((row) => row.id), role);
 
   const signupClient = createAuthClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,19 +62,38 @@ export async function createAccount(formData: FormData) {
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
-  const { data, error } = await signupClient.auth.signUp({
-    email: authEmail(loginId),
-    password,
-  });
-  if (error || !data.user) {
-    const message = error?.message?.includes("rate limit")
-      ? "Supabase blocked this account because it tried to email a confirmation. In Supabase, open Authentication, then Providers, then Email, and turn off Confirm email. Then create the account again."
-      : (error?.message ?? "Could not create login");
-    redirect(`/admin/users/new?error=${encodeURIComponent(message)}`);
+  let createdUser: { id: string } | null = null;
+  let failure = "Could not create login";
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { data, error } = await signupClient.auth.signUp({
+      email: authEmail(loginId),
+      password,
+    });
+    const hiddenExistingUser = Array.isArray(data?.user?.identities) && data.user.identities.length === 0;
+    if (error?.message.includes("rate limit")) {
+      failure =
+        "Supabase blocked this account because it tried to email a confirmation. In Supabase, open Authentication, then Providers, then Email, and turn off Confirm email. Then create the account again.";
+      break;
+    }
+    if ((error && loginAlreadyUsed(error.message)) || hiddenExistingUser) {
+      failure = `${authEmail(loginId)} is already a login, but it is not listed on this page.`;
+      loginId = bumpLoginId(loginId);
+      continue;
+    }
+    if (error || !data.user) {
+      failure = error?.message ?? failure;
+      break;
+    }
+    createdUser = data.user;
+    break;
+  }
+
+  if (!createdUser) {
+    redirect(`/admin/users/new?error=${encodeURIComponent(failure)}`);
   }
 
   const { error: profileError } = await supabase.from("profiles").insert({
-    uuid: data.user.id,
+    uuid: createdUser.id,
     id: loginId,
     name: fullName,
     email: email || null,

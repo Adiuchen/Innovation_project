@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { PlantGallery } from "@/components/PlantGallery";
@@ -62,22 +61,15 @@ export async function PlantView({
     <section className="grid items-stretch gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
       <div className="flex min-w-0 flex-col gap-3">
         <PlantGallery photos={gallery} emptyLabel={t.noPhotos} qrSrc={qr?.image} qrAlt={t.qrCode} />
-        {qr && qrCode && (
-          <div>
-            <p className="text-sm">
-              {t.publicPage}: <Link href={qr.path}>{qr.path}</Link>
-            </p>
-            {canPrint && (
-              <PrintQrButton
-                qrCode={qrCode}
-                recordId={recordId}
-                label={t.printQr}
-                printingLabel={t.printingQr}
-                successLabel={t.qrPrinted}
-                failedLabel={t.qrPrintFailed}
-              />
-            )}
-          </div>
+        {qr && qrCode && canPrint && (
+          <PrintQrButton
+            qrCode={qrCode}
+            recordId={recordId}
+            label={t.printQr}
+            printingLabel={t.printingQr}
+            successLabel={t.qrPrinted}
+            failedLabel={t.qrPrintFailed}
+          />
         )}
       </div>
 
@@ -160,7 +152,7 @@ async function plantQr(qrCode: string) {
   const proto = headerStore.get("x-forwarded-proto") ?? "http";
   const pageUrl = `${proto}://${host}/p/${qrCode}`;
   const image = await QRCode.toDataURL(pageUrl);
-  return { image, path: `/p/${qrCode}` };
+  return { image };
 }
 
 function formatCoordinates(latitude: number, longitude: number | null) {

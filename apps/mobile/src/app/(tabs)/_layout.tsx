@@ -77,6 +77,13 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="records"
+        listeners={({ navigation }) => ({
+          tabPress: (event) => {
+            // A scan or a recent plant leaves its detail on this stack. The tab itself is the list.
+            event.preventDefault();
+            navigation.navigate("records", { screen: "index" });
+          },
+        })}
         options={{
           title: t.recordsTab,
           tabBarIcon: ({ color, size, focused }) => (
