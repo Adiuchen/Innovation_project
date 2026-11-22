@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
+import { EmergencyButton } from "@/components/EmergencyButton";
 import { SyncBar } from "@/components/SyncBar";
 import { ScanTabButtonIcon } from "@/components/ScanTabButton";
 import { HomeTabIcon, PlantsTabIcon, RecordsTabIcon, SpeciesTabIcon, TabSlot } from "@/components/TabIcon";
@@ -44,6 +45,7 @@ export default function TabLayout() {
   }, [pending, profile, version]);
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       // Match unstable_settings.anchor ("field") so Android/system back reaches Home instead of a dead GO_BACK.
       backBehavior="initialRoute"
@@ -131,5 +133,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen name="events" options={offTabBar} />
     </Tabs>
+    <EmergencyButton />
+    </View>
   );
 }

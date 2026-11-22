@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { EmergencyWatch } from "@/components/EmergencyWatch";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { PreferencesProvider, usePreferences } from "@/lib/preferences";
 
@@ -34,17 +35,20 @@ function RootNavigator() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.field } }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="tag" options={{ presentation: "fullScreenModal" }} />
-      <Stack.Screen name="p/[code]" />
-      <Stack.Screen name="e/[id]" />
-      <Stack.Screen name="login" />
-      <Stack.Protected guard={profile != null}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="settings" />
-      </Stack.Protected>
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.field } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="tag" options={{ presentation: "fullScreenModal" }} />
+        <Stack.Screen name="p/[code]" />
+        <Stack.Screen name="e/[id]" />
+        <Stack.Screen name="login" />
+        <Stack.Protected guard={profile != null}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="settings" />
+        </Stack.Protected>
+      </Stack>
+      {profile ? <EmergencyWatch /> : null}
+    </View>
   );
 }
 

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
+import { EmergencyDesk } from "@/components/EmergencyDesk";
 import { ProfilePanel, type ProfileNotice } from "@/components/ProfilePanel";
 import { homeForRole, getSessionProfile, type Profile } from "@/lib/auth";
+import { emergencyColumns, emergencyMissing, type EmergencyAlert } from "@/lib/emergency";
 import { getCopy, statusText, type Copy } from "@/lib/i18n";
 import { updatesSchemaMissing } from "@/lib/plant-update";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +13,7 @@ export async function SiteHeader() {
   const { locale, t } = await getCopy();
   const notices = profile ? await loadNotices(supabase, profile, t) : [];
   const changeCount = profile?.role === "botanist" ? notices.length : 0;
+  const emergencies = profile ? await loadEmergencies(supabase, profile) : null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-emerald-950/10 bg-white">
@@ -37,8 +40,31 @@ export async function SiteHeader() {
           )}
         </nav>
       </div>
+      {emergencies && (profile?.role === "botanist" || profile?.role === "conservation_officer") && (
+        <EmergencyDesk
+          role={profile.role}
+          userId={profile.uuid}
+          initial={emergencies.alerts}
+          locale={locale}
+          t={t}
+        />
+      )}
     </header>
   );
+}
+
+async function loadEmergencies(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profile: Profile,
+): Promise<{ alerts: EmergencyAlert[]; ready: boolean } | null> {
+  if (profile.role !== "botanist" && profile.role !== "conservation_officer") return null;
+  const { data, error } = await supabase
+    .from("emergency_alerts")
+    .select(emergencyColumns)
+    .eq("status", "open")
+    .order("created_at", { ascending: false });
+  if (emergencyMissing(error)) return { alerts: [], ready: false };
+  return { alerts: (data ?? []) as EmergencyAlert[], ready: true };
 }
 
 async function loadNotices(
