@@ -81,28 +81,6 @@ export async function resubmitRecord(
   return null;
 }
 
-export async function generateRecordQr(recordId: string) {
-  const { data: current, error: readError } = await supabase
-    .from("plant_records")
-    .select("qr_code, local_id")
-    .eq("uuid", recordId)
-    .maybeSingle();
-  if (readError) return { code: null, error: readError.message };
-  if (!current) return { code: null, error: "This record was not found." };
-  if (current.qr_code) return { code: current.qr_code, error: null };
-
-  const code = qrCodeForRecord(
-    typeof current.local_id === "string" && current.local_id.length >= 8 ? current.local_id : recordId,
-  );
-  const { error } = await supabase
-    .from("plant_records")
-    .update({ qr_code: code })
-    .eq("uuid", recordId)
-    .is("qr_code", null);
-  if (error) return { code: null, error: error.message };
-  return { code, error: null };
-}
-
 function friendlyError(message: string) {
   if (/visibility/i.test(message) && /column|schema cache|could not find/i.test(message)) {
     return "Ask an administrator to run apps/mobile/supabase/rare-plants.sql in the Supabase SQL editor, then save again.";

@@ -4,12 +4,21 @@ import { eventHasFinished, formatParkWhen, parkStartParts } from "@/lib/format";
 import { getCopy } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/server";
 
+function returnPath(from: string | string[] | undefined) {
+  const value = Array.isArray(from) ? from[0] : from;
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\") || value.includes("://")) return "/";
+  return value;
+}
+
 export default async function PublicEventPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
   if (!/^E\d{1,6}$/.test(id)) notFound();
 
   const supabase = await createClient();
@@ -27,7 +36,7 @@ export default async function PublicEventPage({
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-6">
-      <BackPage href="/" label={t.backPage} />
+      <BackPage href={returnPath(from)} label={t.backPage} />
       {hasPhoto && (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img

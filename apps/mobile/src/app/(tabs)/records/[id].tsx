@@ -12,7 +12,7 @@ import type { Copy, Locale } from "@/lib/copy";
 import { usePreferences } from "@/lib/preferences";
 import { choiceLabel, firstParam, flowerChoices, formatWhen, healthChoices, leafChoices, lifeStageChoices, plantQrValue, qrCodeForRecord, recordName } from "@/lib/plant";
 import { listOpenPlantUpdates } from "@/lib/plant-updates";
-import { deleteRemoteDraft, generateRecordQr, resubmitRecord } from "@/lib/remote";
+import { deleteRemoteDraft, resubmitRecord } from "@/lib/remote";
 import { refreshReferenceData } from "@/lib/sync";
 import { siteUrl } from "@/lib/supabase";
 import { colors } from "@/theme";
@@ -181,37 +181,6 @@ export default function RecordDetailScreen() {
         />
       )}
 
-      {!record.qr_code && profile.role === "botanist" && (
-        <>
-          <Notice tone="warn">
-            This record is missing a QR tag. Repair assigns a stable code from the record id and does not change an
-            existing printed tag.
-          </Notice>
-          <Button
-            label={working ? "Repairing…" : "Repair missing QR code"}
-            disabled={working || !online}
-            onPress={async () => {
-              if (!online) {
-                setMessage("Connect to the network before repairing a missing QR code.");
-                return;
-              }
-              setWorking(true);
-              const result = await generateRecordQr(record.uuid);
-              setWorking(false);
-              if (result.error || !result.code) {
-                setMessage(result.error ?? "Could not repair the QR code.");
-                return;
-              }
-              setRecord({ ...record, qr_code: result.code });
-              await syncNow();
-              await load();
-            }}
-          />
-        </>
-      )}
-      {!record.qr_code && !online && (
-        <Notice tone="warn">Connect to repair a missing QR tag, or submit a new record offline to assign one.</Notice>
-      )}
       {tagCode && qrValue ? (
         <View style={styles.qr}>
           <QRCode value={qrValue} size={180} />

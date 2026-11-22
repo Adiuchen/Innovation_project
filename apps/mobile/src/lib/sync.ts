@@ -479,6 +479,91 @@ function recordFromApi(row: RecordApi, userId = ""): CachedRecord {
   };
 }
 
+function numberField(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+async function photosForRecord(recordId: string) {
+  const hidden = await supabase
+    .from("plant_photos")
+    .select("storage_path, caption")
+    .eq("plant_record_id", recordId)
+    .is("hidden_at", null);
+  const photos =
+    hidden.error && /hidden_at/i.test(hidden.error.message)
+      ? await supabase.from("plant_photos").select("storage_path, caption").eq("plant_record_id", recordId)
+      : hidden;
+  if (photos.error || !photos.data) return [];
+  return cachePhotoFiles(photos.data as PhotoRef[]);
+}
+
+async function asRecordHit(row: RecordApi, knownPhotos?: PhotoRef[]): Promise<TagHit> {
+  const record = recordFromApi(row);
+  if (!record.qr_code) {
+    const seed = typeof row.local_id === "string" && row.local_id.length >= 8 ? row.local_id : row.uuid;
+    record.qr_code = qrCodeForRecord(seed);
+  }
+  record.photos = knownPhotos && knownPhotos.length > 0 ? await cachePhotoFiles(knownPhotos) : await photosForRecord(record.uuid);
+  return { kind: "record", record };
+}
+
+function recordFromStaffTag(value: unknown): { row: RecordApi; photos: PhotoRef[] } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (typeof data.uuid !== "string" || typeof data.status !== "string") return null;
+  const photos = Array.isArray(data.photos)
+    ? data.photos.flatMap((photo) => {
+        if (!photo || typeof photo !== "object") return [];
+        const item = photo as Record<string, unknown>;
+        return typeof item.storage_path === "string"
+          ? [{ storage_path: item.storage_path, caption: typeof item.caption === "string" ? item.caption : null }]
+          : [];
+      })
+    : [];
+  return {
+    row: {
+      uuid: data.uuid,
+      id: typeof data.id === "string" ? data.id : null,
+      botanist_id: typeof data.botanist_id === "string" ? data.botanist_id : null,
+      local_id: typeof data.local_id === "string" ? data.local_id : null,
+      species_id: typeof data.species_id === "string" ? data.species_id : null,
+      plant_name: typeof data.plant_name === "string" ? data.plant_name : null,
+      life_stage: typeof data.life_stage === "string" ? data.life_stage : null,
+      status: data.status,
+      location_name: typeof data.location_name === "string" ? data.location_name : null,
+      latitude: numberField(data.latitude),
+      longitude: numberField(data.longitude),
+      height_m: numberField(data.height_m),
+      trunk_diameter_cm: numberField(data.trunk_diameter_cm),
+      leaf_traits: typeof data.leaf_traits === "string" ? data.leaf_traits : null,
+      flower_fruit_traits: typeof data.flower_fruit_traits === "string" ? data.flower_fruit_traits : null,
+      health_status: typeof data.health_status === "string" ? data.health_status : null,
+      other_traits: typeof data.other_traits === "string" ? data.other_traits : null,
+      qr_code: typeof data.qr_code === "string" ? data.qr_code : null,
+      review_note: typeof data.review_note === "string" ? data.review_note : null,
+      recorded_at: typeof data.recorded_at === "string" ? data.recorded_at : null,
+      species: {
+        scientific_name: typeof data.scientific_name === "string" ? data.scientific_name : null,
+        common_name: typeof data.common_name === "string" ? data.common_name : null,
+      },
+    },
+    photos,
+  };
+}
+
+async function lookupStaffPlantTag(code: string): Promise<TagHit | null> {
+  const rpc = await supabase.rpc("staff_read_plant_tag", { code });
+  if (rpc.error || rpc.data == null) return null;
+  const parsed = recordFromStaffTag(rpc.data);
+  if (!parsed) return null;
+  return asRecordHit(parsed.row, parsed.photos);
+}
+
 async function lookupRemoteRecord(code: string): Promise<TagHit | null> {
   const select =
     "uuid, id, botanist_id, plant_name, life_stage, species_id, status, location_name, latitude, longitude, height_m, trunk_diameter_cm, leaf_traits, flower_fruit_traits, health_status, other_traits, qr_code, visibility, review_note, recorded_at, local_id, species(scientific_name, common_name)";
@@ -488,23 +573,36 @@ async function lookupRemoteRecord(code: string): Promise<TagHit | null> {
     primaryRemote.error && /visibility/i.test(primaryRemote.error.message)
       ? await supabase.from("plant_records").select(plainSelect).eq("qr_code", code).maybeSingle()
       : primaryRemote;
-  if (!remote.error && remote.data) return { kind: "record", record: recordFromApi(remote.data as unknown as RecordApi) };
+  if (!remote.error && remote.data) return asRecordHit(remote.data as unknown as RecordApi);
 
   const prefix = plantCodePrefix(code);
-  if (!prefix) return null;
   const columns = primaryRemote.error && /visibility/i.test(primaryRemote.error.message) ? plainSelect : select;
-  const aliased = await supabase
-    .from("plant_records")
-    .select(columns)
-    .or(`local_id.ilike.${prefix}%,uuid.ilike.${prefix}%`)
-    .limit(5);
-  if (aliased.error) return null;
-  const hit = ((aliased.data ?? []) as unknown as RecordApi[]).find((row) => {
-    const local = typeof row.local_id === "string" ? row.local_id.toLowerCase() : "";
-    const uuid = typeof row.uuid === "string" ? row.uuid.toLowerCase() : "";
-    return local.startsWith(prefix) || uuid.startsWith(prefix);
-  });
-  return hit ? { kind: "record", record: recordFromApi(hit) } : null;
+  if (prefix) {
+    // Match the printed local id on its own. Combining it with uuid.ilike makes Postgres
+    // reject the whole lookup, so a tag that is not stored in qr_code looks missing.
+    const byLocal = await supabase.from("plant_records").select(columns).ilike("local_id", `${prefix}%`).limit(5);
+    if (!byLocal.error) {
+      const hit = ((byLocal.data ?? []) as unknown as RecordApi[]).find((row) => tagMatches(row, prefix));
+      if (hit) return asRecordHit(hit);
+    }
+
+    // The session can already read its own records, and an officer can read every record.
+    // Match the printed prefix here when the tag was never copied into qr_code.
+    const listed = await supabase.from("plant_records").select(columns).order("recorded_at", { ascending: false }).limit(1000);
+    if (!listed.error) {
+      const hit = ((listed.data ?? []) as unknown as RecordApi[]).find((row) => tagMatches(row, prefix));
+      if (hit) return asRecordHit(hit);
+    }
+  }
+
+  return lookupStaffPlantTag(code);
+}
+
+function tagMatches(row: RecordApi, prefix: string) {
+  const local = typeof row.local_id === "string" ? row.local_id.toLowerCase() : "";
+  const uuid = typeof row.uuid === "string" ? row.uuid.toLowerCase() : "";
+  const code = typeof row.qr_code === "string" ? row.qr_code.toLowerCase() : "";
+  return local.startsWith(prefix) || uuid.startsWith(prefix) || code === `plant-${prefix}`;
 }
 
 export async function lookupTag(code: string, online: boolean): Promise<TagHit> {

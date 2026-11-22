@@ -6,7 +6,7 @@ import { Muted, Notice } from "@/components/ui";
 import { listSpecies } from "@/lib/db";
 import { useAuth } from "@/lib/auth";
 import { speciesPhoto } from "@/lib/photo-path";
-import { colors } from "@/theme";
+import { colors, conservationColors } from "@/theme";
 import type { Species } from "@/types";
 
 export default function SpeciesScreen() {
@@ -69,15 +69,21 @@ export default function SpeciesScreen() {
               <Text style={styles.name}>{item.scientific_name}</Text>
               <Muted>
                 {item.code}
-                {item.common_name ? ` · ${item.common_name}` : " · No common name"}
-                {item.conservation_status ? ` · ${item.conservation_status}` : ""}
+                {item.common_name ? ` · ${item.common_name}` : ""}
+                {item.family ? ` · ${item.family}` : ""}
               </Muted>
             </View>
+            {item.conservation_status ? <ConservationMark status={item.conservation_status} /> : null}
           </Pressable>
         );
       }}
     />
   );
+}
+
+function ConservationMark({ status }: { status: string }) {
+  const tone = conservationColors(status);
+  return <Text style={[styles.mark, { backgroundColor: tone.background, color: tone.text }]}>{status}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -107,5 +113,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   copy: { flex: 1, gap: 4 },
-  name: { color: colors.ink, fontSize: 16, fontWeight: "700" },
+  name: { color: colors.ink, fontSize: 16, fontStyle: "italic", fontWeight: "600" },
+  mark: {
+    maxWidth: 120,
+    overflow: "hidden",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
 });

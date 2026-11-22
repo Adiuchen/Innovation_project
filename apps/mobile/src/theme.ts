@@ -52,6 +52,14 @@ export const headerOptions = {
   contentStyle: { backgroundColor: colors.paper },
 };
 
+export function conservationColors(status: string) {
+  const value = status.toLowerCase();
+  if (value.includes("least concern")) return { background: colors.okBg, text: colors.forest };
+  if (value.includes("near threatened") || value.includes("vulnerable")) return { background: colors.warningBg, text: colors.warning };
+  if (value.includes("endangered") || value.includes("extinct")) return { background: colors.dangerBg, text: colors.danger };
+  return { background: "#eeeae2", text: colors.muted };
+}
+
 export function statusColors(status: string) {
   switch (status) {
     case "approved":

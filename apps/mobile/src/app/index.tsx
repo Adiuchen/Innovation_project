@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandMark } from "@/components/BrandMark";
@@ -35,6 +35,7 @@ export default function GuestHome() {
   const [catalog, setCatalog] = useState<PublicCatalogStatus | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadNote, setDownloadNote] = useState<string | null>(null);
+  const [versionNotice, setVersionNotice] = useState(false);
 
   const loadEvents = useCallback(async () => {
     const result = await listUpcomingEvents();
@@ -111,6 +112,7 @@ export default function GuestHome() {
       setDownloadNote(null);
       setPlants(await searchPublicPlants(query, true));
       setError(null);
+      setVersionNotice(true);
     } catch (cause) {
       setDownloadNote(cause instanceof Error ? cause.message : "Could not download plant details.");
     } finally {
@@ -201,11 +203,11 @@ export default function GuestHome() {
             >
               <Text style={styles.downloadButtonText}>{downloading ? "Downloading…" : catalog ? "Update offline plants" : "Download for offline"}</Text>
             </Pressable>
-            <Text style={styles.catalogNote}>
-              {catalog
-                ? catalogLabel(catalog)
-                : "Download plant details before a visit. They stay on this phone until the next download."}
-            </Text>
+            {catalog ? null : (
+              <Text style={styles.catalogNote}>
+                Download plant details before a visit. They stay on this phone until the next download.
+              </Text>
+            )}
             {downloadNote ? <Text style={styles.error}>{downloadNote}</Text> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
           </View>
@@ -238,17 +240,24 @@ export default function GuestHome() {
         }
         renderItem={({ item }) => <PlantTile plant={item} size={tileSize} />}
       />
+      <Modal visible={versionNotice} transparent animationType="fade" onRequestClose={() => setVersionNotice(false)}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" style={styles.noticeOverlay} onPress={() => setVersionNotice(false)}>
+          <Pressable style={styles.noticeCard} onPress={() => undefined}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
+              onPress={() => setVersionNotice(false)}
+              style={styles.noticeClose}
+            >
+              <Text style={styles.noticeCloseText}>×</Text>
+            </Pressable>
+            <Text style={styles.noticeText}>Updated to the latest version.</Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
-}
-
-function catalogLabel(status: PublicCatalogStatus) {
-  const date = new Date(status.savedAt);
-  const when = Number.isNaN(date.getTime())
-    ? status.savedAt
-    : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-  const count = status.plantCount === 1 ? "1 plant" : `${status.plantCount} plants`;
-  return `Saved on this phone · ${when} · ${count}`;
 }
 
 function PlantTile({ plant, size }: { plant: PublicPlantCard; size: number }) {
@@ -381,6 +390,25 @@ const styles = StyleSheet.create({
   downloadBusy: { opacity: 0.7 },
   downloadButtonText: { color: "#fffdf8", fontWeight: "700", fontSize: 16 },
   catalogNote: { color: "#5c6560", fontSize: 13, lineHeight: 18 },
+  noticeOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(20, 53, 40, 0.28)",
+    padding: 32,
+  },
+  noticeCard: {
+    width: "100%",
+    maxWidth: 260,
+    backgroundColor: "#fffcf8",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 22,
+    paddingTop: 8,
+  },
+  noticeClose: { alignSelf: "flex-end", width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  noticeCloseText: { color: colors.ink, fontSize: 24, lineHeight: 26 },
+  noticeText: { color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: "700", textAlign: "center" },
   error: { color: colors.danger, fontSize: 14 },
   empty: {
     backgroundColor: "#fffcf8",

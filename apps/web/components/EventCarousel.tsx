@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export type EventSlide = {
@@ -21,9 +22,11 @@ export function EventCarousel({
   label: string;
   viewLabel: string;
 }) {
+  const pathname = usePathname();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const slide = slides[index] ?? slides[0];
+  const from = encodeURIComponent(pathname || "/");
 
   useEffect(() => {
     if (slides.length < 2 || paused) return;
@@ -55,7 +58,7 @@ export function EventCarousel({
           </>
         )}
         <div className={photo ? "relative px-5 py-6 sm:px-6" : undefined}>
-          <Link href={`/e/${slide.id}`} className="flex items-center justify-between gap-4" data-slide={slide.id}>
+          <Link href={`/e/${slide.id}?from=${from}`} className="flex items-center justify-between gap-4" data-slide={slide.id}>
             <div className="min-w-0">
               <p className={`text-sm font-medium ${photo ? "text-emerald-100" : "text-forest"}`}>{label}</p>
               <h2 className="mt-1 truncate text-2xl font-semibold">{slide.title}</h2>
